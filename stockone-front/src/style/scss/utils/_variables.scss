@@ -1,0 +1,97 @@
+// ============================================================
+// Variables Stock.one — Charte Orange & Noir
+// ============================================================
+
+// Brand Colors
+$primary:         #F97316;   // Orange principal
+$primary-dark:    #EA580C;   // Orange foncé
+$primary-light:   #FED7AA;   // Orange clair
+$primary-subtle:  #FFF7ED;   // Orange très clair (bg)
+$secondary:       #1a1a1a;   // Noir principal
+$secondary-light: #374151;   // Gris foncé
+$accent:          #FBBF24;   // Jaune-orange accent
+
+// Status Colors
+$success:  #16a34a;
+$warning:  #F97316;
+$danger:   #dc2626;
+$info:     #0891b2;
+
+// Neutral
+$white:    #ffffff;
+$gray-50:  #f9fafb;
+$gray-100: #f3f4f6;
+$gray-200: #e5e7eb;
+$gray-300: #d1d5db;
+$gray-400: #9ca3af;
+$gray-500: #6b7280;
+$gray-600: #4b5563;
+$gray-700: #374151;
+$gray-800: #1f2937;
+$gray-900: #111827;
+
+// Typography
+$font-family-base: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+$font-size-base:   14px;
+$font-size-sm:     12px;
+$font-size-lg:     16px;
+$line-height-base: 1.6;
+
+$font-weight-normal:  400;
+$font-weight-medium:  500;
+$font-weight-semibold:600;
+$font-weight-bold:    700;
+
+// Sidebar
+$sidebar-width:       260px;
+$sidebar-mini-width:  70px;
+$sidebar-bg:          #1a1a1a;
+$sidebar-text:        #d1d5db;
+$sidebar-text-active: #F97316;
+$sidebar-item-hover:  rgba(249, 115, 22, 0.1);
+$sidebar-item-active: rgba(249, 115, 22, 0.15);
+
+// Header
+$header-height:  65px;
+$header-bg:      #ffffff;
+$header-shadow:  0 1px 4px rgba(0, 0, 0, 0.08);
+
+// Layout
+$content-bg:     #f8f9fa;
+$border-radius:  8px;
+$border-radius-sm: 4px;
+$border-radius-lg: 12px;
+$border-color:   #e5e7eb;
+
+// Shadows
+$shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+$shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+$shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+// Cards
+$card-bg:        #ffffff;
+$card-border:    1px solid #e5e7eb;
+$card-radius:    $border-radius;
+$card-shadow:    $shadow-sm;
+$card-padding:   1.25rem;
+
+// Transitions
+$transition-base: all 0.2s ease;
+$transition-fast: all 0.15s ease;
+
+// Z-indexes
+$zindex-sidebar:   1000;
+$zindex-header:    999;
+$zindex-dropdown:  1050;
+$zindex-modal:     1060;
+$zindex-overlay:   998;
+
+// Bootstrap overrides
+$theme-colors: (
+  "primary":   $primary,
+  "secondary": $secondary,
+  "success":   $success,
+  "warning":   $warning,
+  "danger":    $danger,
+  "info":      $info,
+);

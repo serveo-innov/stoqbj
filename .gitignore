@@ -1,0 +1,24 @@
+﻿# Backend Laravel
+stockone/vendor/
+stockone/.env
+stockone/storage/*.key
+stockone/storage/framework/cache/*
+stockone/storage/framework/sessions/*
+stockone/storage/framework/views/*
+stockone/storage/logs/*
+stockone/bootstrap/cache/*.php
+stockone/public/hot
+stockone/public/storage
+stockone/.phpunit.result.cache
+
+# Frontend React
+stockone-front/node_modules/
+stockone-front/dist/
+stockone-front/build/
+stockone-front/.env
+stockone-front/.vite/
+
+# Général
+.DS_Store
+Thumbs.db
+*.log

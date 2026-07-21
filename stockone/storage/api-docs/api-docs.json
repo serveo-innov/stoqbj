@@ -1,0 +1,3063 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Stock.one API",
+        "description": "API de gestion de stocks pour papeteries - Benin",
+        "contact": {
+            "email": "admin@stockone.test"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://stockone.test:81/api/v1",
+            "description": "Serveur local Laragon"
+        }
+    ],
+    "paths": {
+        "/alerts": {
+            "get": {
+                "tags": [
+                    "Alertes"
+                ],
+                "summary": "Liste des alertes",
+                "description": "Liste des alertes non lues",
+                "operationId": "761f6279117c3162bb673a3db335196b",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "unread_only",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Alertes retournees"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/alerts/{id}/read": {
+            "post": {
+                "tags": [
+                    "Alertes"
+                ],
+                "summary": "Marquer une alerte comme lue",
+                "description": "Marquer une alerte comme lue",
+                "operationId": "a4ffc73cfdf62ce75354aab77b68506a",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/alerts/read-all": {
+            "post": {
+                "tags": [
+                    "Alertes"
+                ],
+                "summary": "Marquer toutes les alertes comme lues",
+                "description": "Marquer toutes les alertes comme lues",
+                "operationId": "08a3d5f8599351c543066bbb781886a6",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/alerts/price-suggestions": {
+            "get": {
+                "tags": [
+                    "Alertes"
+                ],
+                "summary": "Suggestions de reajustement de prix",
+                "description": "Suggestions de prix IA",
+                "operationId": "a46551e524bebcce4f203a8fd5b99d2a",
+                "responses": {
+                    "200": {
+                        "description": "Suggestions retournees"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/alerts/price-suggestions/{id}/accept": {
+            "post": {
+                "tags": [
+                    "Alertes"
+                ],
+                "summary": "Accepter une suggestion de prix",
+                "description": "Accepter une suggestion de prix",
+                "operationId": "bb331e082605e653a048cc9815bfc5ba",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Prix mis a jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/alerts/price-suggestions/{id}/reject": {
+            "post": {
+                "tags": [
+                    "Alertes"
+                ],
+                "summary": "Rejeter une suggestion de prix",
+                "description": "Rejeter une suggestion de prix",
+                "operationId": "47f63e4ce609fe8cc6d3682d6881ae41",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "reason": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Suggestion rejetee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Connexion utilisateur",
+                "operationId": "99d66635c4992aeaa6aa44ff653d0563",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "superadmin@stockone.test"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "StockOne@2025"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Connexion reussie"
+                    },
+                    "401": {
+                        "description": "Identifiants incorrects"
+                    },
+                    "422": {
+                        "description": "Donnees invalides"
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Deconnexion",
+                "operationId": "6abf3b64a4bc7838d56346f05a5153af",
+                "responses": {
+                    "200": {
+                        "description": "Deconnexion reussie"
+                    },
+                    "401": {
+                        "description": "Non authentifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/me": {
+            "get": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Profil utilisateur connecte",
+                "operationId": "7edae2cdbaafc10dff8c9c4198b320a2",
+                "responses": {
+                    "200": {
+                        "description": "Profil retourne"
+                    },
+                    "401": {
+                        "description": "Non authentifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Renouveler le token",
+                "operationId": "e7ab7446393758bb71fd1946a349e500",
+                "responses": {
+                    "200": {
+                        "description": "Nouveau token genere"
+                    },
+                    "401": {
+                        "description": "Non authentifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/categories": {
+            "get": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Liste des categories",
+                "operationId": "b1b247b2b491b0491c3c728dc33f23f0",
+                "responses": {
+                    "200": {
+                        "description": "Liste retournee"
+                    },
+                    "401": {
+                        "description": "Non authentifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Creer une categorie",
+                "operationId": "c86cd7a85ad06a4fe905bfab62146952",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Cahiers"
+                                    },
+                                    "color": {
+                                        "type": "string",
+                                        "example": "#6366f1"
+                                    },
+                                    "icon": {
+                                        "type": "string",
+                                        "example": "book"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Categorie creee"
+                    },
+                    "422": {
+                        "description": "Donnees invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/categories/{id}": {
+            "get": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Detail categorie",
+                "operationId": "486849467f411ec5e4bdf111f50ede87",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Modifier une categorie",
+                "operationId": "b648463d94e0caf7b8d842a1008789b2",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Supprimer une categorie",
+                "operationId": "491dfe5b6b58b480181690ede6550e44",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Supprimee"
+                    },
+                    "409": {
+                        "description": "Categorie utilisee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/clients": {
+            "get": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Liste des clients",
+                "operationId": "6536f8d22d25758c3e14dbbe8e228af0",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste retournée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Créer un client",
+                "operationId": "74a35b85418e09c2489915865dd22445",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "phone"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Gbedo"
+                                    },
+                                    "firstname": {
+                                        "type": "string",
+                                        "example": "Francois"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+22997000002"
+                                    },
+                                    "address": {
+                                        "type": "string"
+                                    },
+                                    "is_extra_buyer": {
+                                        "type": "boolean",
+                                        "example": false
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Client créé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/clients/{id}": {
+            "get": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Détail client avec historique",
+                "operationId": "1837c830668b0f7aa87761172e9a8cf9",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Modifier un client",
+                "operationId": "1ee17ab59b59dd0a816f385b724d2b6c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/credits": {
+            "get": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Liste des credits",
+                "description": "Liste des crédits avec filtres",
+                "operationId": "06524fc31f65d27206387f3f86bdb87e",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "partial",
+                                "paid",
+                                "overdue",
+                                "doubtful"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "client_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "overdue",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste retournee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/credits/{id}": {
+            "get": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Detail d'un credit",
+                "description": "Détail d'un crédit",
+                "operationId": "ee1d81f706fc9fc241c362c075b50ec7",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/credits/{id}/payments": {
+            "post": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Encaisser un paiement sur un credit",
+                "description": "Enregistrer un paiement sur un crédit",
+                "operationId": "a1bec84c6b07423044b959b54c527a4f",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "amount",
+                                    "payment_method"
+                                ],
+                                "properties": {
+                                    "amount": {
+                                        "type": "number",
+                                        "example": 2000
+                                    },
+                                    "payment_method": {
+                                        "type": "string",
+                                        "example": "cash",
+                                        "enum": [
+                                            "cash",
+                                            "mobile_money",
+                                            "virement"
+                                        ]
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Paiement enregistre"
+                    },
+                    "422": {
+                        "description": "Montant invalide"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/credits/{id}/doubtful": {
+            "post": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Marquer comme creance douteuse",
+                "description": "Marquer un crédit comme douteux",
+                "operationId": "d09ffaadd38a6342ac893e2d80c22a46",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Statut mis a jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/credits/{id}/extend": {
+            "post": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Prolonger l'echeance",
+                "description": "Prolonger la date d'échéance",
+                "operationId": "2ed2780c63adac657fb4856d81c51bfb",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "days"
+                                ],
+                                "properties": {
+                                    "days": {
+                                        "description": "Nombre de jours supplementaires",
+                                        "type": "integer",
+                                        "example": 7
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Echeance prolongee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/credits/debtors": {
+            "get": {
+                "tags": [
+                    "Credits"
+                ],
+                "summary": "Tableau des debiteurs",
+                "description": "Tableau de bord des débiteurs",
+                "operationId": "1b6f2b83c49050a48eab5e163fdc883d",
+                "responses": {
+                    "200": {
+                        "description": "Debiteurs retournes"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/exports/sales": {
+            "get": {
+                "tags": [
+                    "Export"
+                ],
+                "summary": "Exporter les ventes en CSV",
+                "description": "Export ventes CSV",
+                "operationId": "0f6b3eec197f9b99e954523670dfdeab",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "csv",
+                            "enum": [
+                                "csv",
+                                "excel"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Fichier telecharge"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/exports/sales/details": {
+            "get": {
+                "tags": [
+                    "Export"
+                ],
+                "summary": "Exporter le detail des ventes en CSV",
+                "description": "Export lignes de ventes détaillées CSV",
+                "operationId": "02fe7e10236dd1324f5145ac08d92836",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Fichier telecharge"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/exports/stock": {
+            "get": {
+                "tags": [
+                    "Export"
+                ],
+                "summary": "Exporter l'etat du stock en CSV",
+                "description": "Export stock CSV",
+                "operationId": "a7b5d191b76cb9d36322a9dc59e4200f",
+                "responses": {
+                    "200": {
+                        "description": "Fichier telecharge"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/exports/credits": {
+            "get": {
+                "tags": [
+                    "Export"
+                ],
+                "summary": "Exporter les credits en CSV",
+                "description": "Export crédits CSV",
+                "operationId": "89897236d1c692b9a17a014456f358bc",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "all",
+                            "enum": [
+                                "all",
+                                "pending",
+                                "partial",
+                                "overdue",
+                                "doubtful"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Fichier telecharge"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/exports/stock/movements": {
+            "get": {
+                "tags": [
+                    "Export"
+                ],
+                "summary": "Exporter les mouvements de stock en CSV",
+                "description": "Export mouvements de stock CSV",
+                "operationId": "cca231dcb10977fbd249a68d3e361daa",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Fichier telecharge"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/invoices/{saleId}/a4": {
+            "get": {
+                "tags": [
+                    "Facturation"
+                ],
+                "summary": "Telecharger facture A4",
+                "description": "Télécharger la facture A4 d'une vente",
+                "operationId": "c94129a2555c2030ce0e577f03992df1",
+                "parameters": [
+                    {
+                        "name": "saleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "PDF retourne"
+                    },
+                    "404": {
+                        "description": "Vente introuvable"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/invoices/{saleId}/ticket": {
+            "get": {
+                "tags": [
+                    "Facturation"
+                ],
+                "summary": "Telecharger ticket thermique 80mm",
+                "description": "Télécharger le ticket thermique 80mm",
+                "operationId": "5d45b9f427770682aba8831d0d27442b",
+                "parameters": [
+                    {
+                        "name": "saleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Ticket PDF retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/invoices/report/daily": {
+            "get": {
+                "tags": [
+                    "Facturation"
+                ],
+                "summary": "Telecharger rapport quotidien PDF",
+                "description": "Télécharger le rapport quotidien PDF",
+                "operationId": "ed18822594ca7a00522a158bce7a796b",
+                "parameters": [
+                    {
+                        "name": "date",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rapport PDF retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/invoices/{saleId}/preview": {
+            "get": {
+                "tags": [
+                    "Facturation"
+                ],
+                "summary": "Previsualiser facture dans le navigateur",
+                "description": "Prévisualiser la facture dans le navigateur (stream)",
+                "operationId": "ba3f62727734f4cdc2b4a8a727613826",
+                "parameters": [
+                    {
+                        "name": "saleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "a4",
+                            "enum": [
+                                "a4",
+                                "ticket"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "PDF affiche dans le navigateur"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/products": {
+            "get": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Liste des produits",
+                "operationId": "080f057905dc32d2f11065d606dc4cd6",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "category_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "low_stock",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste retournee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Creer un produit avec ses unites",
+                "operationId": "eddf8c7847239ddc1040daadd814e21b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "units"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Stylo Bic Cristal Bleu"
+                                    },
+                                    "category_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "reference": {
+                                        "type": "string",
+                                        "example": "STY-BIC-001"
+                                    },
+                                    "barcode": {
+                                        "type": "string",
+                                        "example": "3086123456789"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "units": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "level": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "label": {
+                                                    "type": "string",
+                                                    "example": "Gros Carton"
+                                                },
+                                                "qty_in_parent": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "price_wholesale": {
+                                                    "type": "number",
+                                                    "example": 12000
+                                                },
+                                                "price_extra": {
+                                                    "type": "number",
+                                                    "example": 14000
+                                                },
+                                                "cost_price": {
+                                                    "type": "number",
+                                                    "example": 10000
+                                                },
+                                                "stock_qty": {
+                                                    "type": "integer",
+                                                    "example": 0
+                                                },
+                                                "stock_alert_threshold": {
+                                                    "type": "integer",
+                                                    "example": 2
+                                                },
+                                                "is_divisible": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "is_sellable": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Produit cree"
+                    },
+                    "422": {
+                        "description": "Donnees invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/products/{id}": {
+            "get": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Detail produit",
+                "operationId": "b5099368868dbe7900acd129345eb148",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Modifier un produit",
+                "operationId": "2ce632b9d1c0c445557821d09add7ec2",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Archiver un produit",
+                "operationId": "76bb7dc4ab3fc3233d5b33ef58e95d7d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Archive"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/products/{id}/units/{unitId}/price": {
+            "put": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Modifier les prix d'une unite",
+                "operationId": "3c15d34caeea31c9e975d96d8831cfef",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "price_wholesale": {
+                                        "type": "number",
+                                        "example": 13000
+                                    },
+                                    "price_extra": {
+                                        "type": "number",
+                                        "example": 15000
+                                    },
+                                    "cost_price": {
+                                        "type": "number",
+                                        "example": 11000
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "enum": [
+                                            "manual",
+                                            "promotion",
+                                            "correction"
+                                        ]
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Prix mis a jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/reports/dashboard": {
+            "get": {
+                "tags": [
+                    "Rapports"
+                ],
+                "summary": "KPIs temps reel du dashboard",
+                "description": "Dashboard KPIs temps réel",
+                "operationId": "a03f09d38dcec1962880029c6c6cfe1c",
+                "responses": {
+                    "200": {
+                        "description": "KPIs retournes"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/reports/period": {
+            "get": {
+                "tags": [
+                    "Rapports"
+                ],
+                "summary": "Rapport par periode",
+                "description": "Rapport par période (jour / semaine / mois)",
+                "operationId": "1923159ae9be0847b446361765f233c8",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "group",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "day",
+                            "enum": [
+                                "day",
+                                "week",
+                                "month"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rapport retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/reports/daily": {
+            "get": {
+                "tags": [
+                    "Rapports"
+                ],
+                "summary": "Rapport quotidien",
+                "description": "Rapport quotidien (générer ou récupérer)",
+                "operationId": "3d5895b7dd53654d42aebd9f1207f0bf",
+                "parameters": [
+                    {
+                        "name": "date",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rapport retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/reports/daily/history": {
+            "get": {
+                "tags": [
+                    "Rapports"
+                ],
+                "summary": "Historique des rapports quotidiens",
+                "description": "Historique des rapports quotidiens",
+                "operationId": "729f4d047560cfe47b77bc264279f547",
+                "parameters": [
+                    {
+                        "name": "months",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 3
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Historique retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/reports/stock": {
+            "get": {
+                "tags": [
+                    "Rapports"
+                ],
+                "summary": "Rapport des stocks",
+                "description": "Rapport des stocks",
+                "operationId": "2dcdfaa2c23c971a47a5a1ea177658fa",
+                "responses": {
+                    "200": {
+                        "description": "Rapport stock retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/sales": {
+            "get": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Liste des ventes",
+                "description": "Liste des ventes",
+                "operationId": "e9071d925184ec3b9522775e6810a95f",
+                "parameters": [
+                    {
+                        "name": "date",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "payment_mode",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste retournée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Créer une vente (POS)",
+                "description": "Valider une vente complète (Gros / Détail / Extra / Mixte)",
+                "operationId": "9741700fd7f92aca7b46ae0fec83a5e1",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "items",
+                                    "payment_mode"
+                                ],
+                                "properties": {
+                                    "client_id": {
+                                        "description": "Optionnel",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "payment_mode": {
+                                        "type": "string",
+                                        "example": "cash",
+                                        "enum": [
+                                            "cash",
+                                            "credit",
+                                            "mobile_money",
+                                            "mixed"
+                                        ]
+                                    },
+                                    "amount_paid": {
+                                        "type": "number",
+                                        "example": 5000
+                                    },
+                                    "discount_amount": {
+                                        "type": "number",
+                                        "example": 0
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    },
+                                    "items": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "product_unit_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "sale_type": {
+                                                    "type": "string",
+                                                    "example": "detail",
+                                                    "enum": [
+                                                        "gros",
+                                                        "detail",
+                                                        "extra"
+                                                    ]
+                                                },
+                                                "quantity": {
+                                                    "type": "integer",
+                                                    "example": 3
+                                                },
+                                                "unit_price": {
+                                                    "type": "number",
+                                                    "example": 500
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "extra_identity": {
+                                        "description": "Requis si sale_type=extra",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "example": "Kossou"
+                                            },
+                                            "firstname": {
+                                                "type": "string",
+                                                "example": "Jean"
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "example": "+22990000001"
+                                            },
+                                            "remarks": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Vente enregistrée"
+                    },
+                    "422": {
+                        "description": "Stock insuffisant ou données invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/sales/{id}": {
+            "get": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Détail d'une vente",
+                "description": "Détail d'une vente",
+                "operationId": "4d377bdabfbfc2a1ac6f34309f497198",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/sales/{id}/hold": {
+            "post": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Mettre en attente",
+                "description": "Mettre une vente en attente (Hold)",
+                "operationId": "956f7e81762392e178723ec73e138721",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vente mise en attente"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/sales/{id}/cancel": {
+            "post": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Annuler une vente",
+                "description": "Annuler une vente (remet le stock)",
+                "operationId": "a8277685cb5e0c0ecf41c7af44229633",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vente annulée"
+                    },
+                    "409": {
+                        "description": "Annulation impossible"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/sales/summary/today": {
+            "get": {
+                "tags": [
+                    "Ventes"
+                ],
+                "summary": "Résumé des ventes du jour",
+                "description": "Résumé des ventes du jour",
+                "operationId": "23205f3e32255fdab8d6ad9b543b7638",
+                "responses": {
+                    "200": {
+                        "description": "Résumé retourné"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/shops": {
+            "get": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Liste toutes les boutiques",
+                "description": "Liste toutes les boutiques",
+                "operationId": "4f708040047bfe8bfcff34c28efdf5f0",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "trial",
+                                "active",
+                                "suspended",
+                                "closed"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste retournee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Creer une boutique",
+                "description": "Créer une boutique avec son Admin",
+                "operationId": "174d0286158675991ad70dc27c3a5f2a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "shop_name",
+                                    "owner_name",
+                                    "owner_firstname",
+                                    "owner_phone",
+                                    "owner_email",
+                                    "address",
+                                    "city"
+                                ],
+                                "properties": {
+                                    "shop_name": {
+                                        "type": "string",
+                                        "example": "Papeterie du Sud"
+                                    },
+                                    "commercial_name": {
+                                        "type": "string",
+                                        "example": "PDS"
+                                    },
+                                    "owner_name": {
+                                        "type": "string",
+                                        "example": "Hounkpe"
+                                    },
+                                    "owner_firstname": {
+                                        "type": "string",
+                                        "example": "Marcel"
+                                    },
+                                    "owner_phone": {
+                                        "type": "string",
+                                        "example": "+22997000010"
+                                    },
+                                    "owner_email": {
+                                        "type": "string",
+                                        "example": "hounkpe@pds.bj"
+                                    },
+                                    "address": {
+                                        "type": "string",
+                                        "example": "Rue du Commerce"
+                                    },
+                                    "city": {
+                                        "type": "string",
+                                        "example": "Porto-Novo"
+                                    },
+                                    "neighborhood": {
+                                        "type": "string"
+                                    },
+                                    "ifu_number": {
+                                        "type": "string"
+                                    },
+                                    "rccm_number": {
+                                        "type": "string"
+                                    },
+                                    "brand_color": {
+                                        "type": "string",
+                                        "example": "#1a73e8"
+                                    },
+                                    "trial_days": {
+                                        "type": "integer",
+                                        "example": 14
+                                    },
+                                    "admin_password": {
+                                        "description": "Mot de passe du compte Admin Shop",
+                                        "type": "string",
+                                        "example": "Password@123"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Boutique creee"
+                    },
+                    "422": {
+                        "description": "Donnees invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/shops/{id}": {
+            "get": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Detail boutique",
+                "description": "Détail d'une boutique",
+                "operationId": "dbbe783526c8daa6c35c39c3a2c373ba",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Modifier une boutique",
+                "description": "Modifier une boutique",
+                "operationId": "d50f29f0ee58b95b8cf39ee314d7a4ba",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/shops/{id}/activate": {
+            "post": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Activer abonnement boutique",
+                "description": "Activer l'abonnement d'une boutique",
+                "operationId": "8a4d4e9514e6a5336e5ec57f10907021",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "payment_method",
+                                    "payment_date",
+                                    "period_start",
+                                    "period_end"
+                                ],
+                                "properties": {
+                                    "amount": {
+                                        "type": "number",
+                                        "example": 35000
+                                    },
+                                    "payment_method": {
+                                        "type": "string",
+                                        "enum": [
+                                            "mobile_money_mtn",
+                                            "mobile_money_moov",
+                                            "virement",
+                                            "especes"
+                                        ]
+                                    },
+                                    "transaction_ref": {
+                                        "type": "string",
+                                        "example": "TXN-2025-001"
+                                    },
+                                    "payment_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2025-01-01"
+                                    },
+                                    "period_start": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2025-01-01"
+                                    },
+                                    "period_end": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2025-12-31"
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Abonnement active"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/shops/{id}/suspend": {
+            "post": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Suspendre une boutique",
+                "description": "Suspendre une boutique",
+                "operationId": "d21fbb699e3a46f2cf0d171af1317742",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "reason": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Boutique suspendue"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/shops/{id}/reactivate": {
+            "post": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Reactiver une boutique",
+                "description": "Réactiver une boutique suspendue",
+                "operationId": "0d3bafa3d853495558b48bcfbcd33eb6",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Boutique reactivee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/stats": {
+            "get": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Statistiques globales plateforme",
+                "description": "Statistiques globales de la plateforme",
+                "operationId": "1a3c40d2aeddfef64c64fe581c4cde31",
+                "responses": {
+                    "200": {
+                        "description": "Stats retournees"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/shops/{id}/payments": {
+            "get": {
+                "tags": [
+                    "Super Admin"
+                ],
+                "summary": "Historique abonnements boutique",
+                "description": "Historique des paiements d'abonnement",
+                "operationId": "ccecec0040090a88238c939f57e76608",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Historique retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/stock/entry": {
+            "post": {
+                "tags": [
+                    "Stock"
+                ],
+                "summary": "Entree de stock",
+                "operationId": "3c0e1242499356304d7308bf6d546ad3",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "product_unit_id",
+                                    "quantity"
+                                ],
+                                "properties": {
+                                    "product_unit_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "quantity": {
+                                        "type": "integer",
+                                        "example": 10
+                                    },
+                                    "supplier_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "unit_cost": {
+                                        "type": "number",
+                                        "example": 10000
+                                    },
+                                    "reference": {
+                                        "type": "string",
+                                        "example": "BON-2025-001"
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "example": "Livraison fournisseur"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Stock mis a jour"
+                    },
+                    "404": {
+                        "description": "Unite introuvable"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/stock/adjustment": {
+            "post": {
+                "tags": [
+                    "Stock"
+                ],
+                "summary": "Ajustement de stock",
+                "operationId": "7a8ed134167047ff1204c97aa3cf0607",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "product_unit_id",
+                                    "quantity",
+                                    "type",
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "product_unit_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "quantity": {
+                                        "type": "integer",
+                                        "example": -3
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "adjustment",
+                                            "return",
+                                            "loss",
+                                            "internal_use",
+                                            "inventory"
+                                        ]
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "example": "Produits endommages"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Ajustement effectue"
+                    },
+                    "422": {
+                        "description": "Stock insuffisant"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/stock/movements": {
+            "get": {
+                "tags": [
+                    "Stock"
+                ],
+                "summary": "Historique des mouvements",
+                "operationId": "729c1dc5601bab18e945080301163210",
+                "parameters": [
+                    {
+                        "name": "product_unit_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Historique retourne"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/stock/alerts": {
+            "get": {
+                "tags": [
+                    "Stock"
+                ],
+                "summary": "Produits en alerte de stock",
+                "operationId": "99a4617dce7fc462ba1f7b89ae48fff5",
+                "responses": {
+                    "200": {
+                        "description": "Alertes retournees"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/suppliers": {
+            "get": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Liste des fournisseurs",
+                "operationId": "5d29c6f6c1ac2bd100e650844ae63ab2",
+                "responses": {
+                    "200": {
+                        "description": "Liste retournee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Creer un fournisseur",
+                "operationId": "51d12a3c668c583e720a6cee45e0c31e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Editions Hachette"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+22961000000"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "example": "contact@hachette.bj"
+                                    },
+                                    "address": {
+                                        "type": "string"
+                                    },
+                                    "city": {
+                                        "type": "string",
+                                        "example": "Cotonou"
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Fournisseur cree"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/suppliers/{id}": {
+            "get": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Detail fournisseur",
+                "operationId": "69e96ed3b2d685955b6cda2ae8bb876c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Modifier un fournisseur",
+                "operationId": "4db4ce948b91abe1f157ae5b6568eacb",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Catalogue"
+                ],
+                "summary": "Supprimer un fournisseur",
+                "operationId": "a6215ed99f496264187b2e99f954616a",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Supprime"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users": {
+            "get": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Liste des utilisateurs",
+                "description": "Liste des utilisateurs de la boutique",
+                "operationId": "7208c29037df2b8bb02499ba39ed8a78",
+                "responses": {
+                    "200": {
+                        "description": "Liste retournee"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Creer un utilisateur",
+                "description": "Créer un utilisateur",
+                "operationId": "262eb5ca1fdea354023c0a8870442c1e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "firstname",
+                                    "email",
+                                    "password",
+                                    "role"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Dossou"
+                                    },
+                                    "firstname": {
+                                        "type": "string",
+                                        "example": "Aime"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "example": "dossou@pcc.bj"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+22997000003"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "example": "Password@123"
+                                    },
+                                    "role": {
+                                        "type": "string",
+                                        "enum": [
+                                            "admin_shop",
+                                            "gerant",
+                                            "caissier"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Utilisateur cree"
+                    },
+                    "422": {
+                        "description": "Donnees invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{id}": {
+            "get": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Detail utilisateur",
+                "description": "Détail d'un utilisateur",
+                "operationId": "6946bbab7898f59a09e3c8e529a38907",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Modifier un utilisateur",
+                "description": "Modifier un utilisateur",
+                "operationId": "05028d02ea3e9a99abd6260cfe05b179",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "firstname": {
+                                        "type": "string"
+                                    },
+                                    "phone": {
+                                        "type": "string"
+                                    },
+                                    "role": {
+                                        "type": "string",
+                                        "enum": [
+                                            "admin_shop",
+                                            "gerant",
+                                            "caissier"
+                                        ]
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Supprimer un utilisateur",
+                "description": "Supprimer un utilisateur (soft)",
+                "operationId": "b3d28da5dc9de7fc1bd425f93b54ff7b",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Supprime"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{id}/password": {
+            "post": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Changer le mot de passe",
+                "description": "Changer le mot de passe d'un utilisateur",
+                "operationId": "c2b43950a3832e8f3a53063f9f05b009",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "password"
+                                ],
+                                "properties": {
+                                    "password": {
+                                        "type": "string",
+                                        "example": "NewPass@2025"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "example": "NewPass@2025"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mot de passe modifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/me/password": {
+            "post": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Changer son propre mot de passe",
+                "description": "Changer son propre mot de passe",
+                "operationId": "a3f02335293b94d5bf6e953172ff1885",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "current_password",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "current_password": {
+                                        "type": "string",
+                                        "example": "OldPass@2025"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "example": "NewPass@2025"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "example": "NewPass@2025"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mot de passe modifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{id}/toggle": {
+            "post": {
+                "tags": [
+                    "Utilisateurs"
+                ],
+                "summary": "Activer ou desactiver un utilisateur",
+                "description": "Activer / Désactiver un utilisateur",
+                "operationId": "119997cab4dd828789fcb5aeed42ca4d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Statut modifie"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "bearerFormat": "JWT",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Alertes",
+            "description": "Alertes et suggestions IA"
+        },
+        {
+            "name": "Catalogue",
+            "description": "Produits et Categories"
+        },
+        {
+            "name": "Ventes",
+            "description": "POS et Caisse"
+        },
+        {
+            "name": "Credits",
+            "description": "Ventes a credit et recouvrement"
+        },
+        {
+            "name": "Export",
+            "description": "Export Excel et CSV"
+        },
+        {
+            "name": "Facturation",
+            "description": "Generation de factures et rapports PDF"
+        },
+        {
+            "name": "Rapports",
+            "description": "Rapports et Statistiques"
+        },
+        {
+            "name": "Super Admin",
+            "description": "Gestion plateforme Stock.one"
+        },
+        {
+            "name": "Stock",
+            "description": "Mouvements de stock"
+        },
+        {
+            "name": "Utilisateurs",
+            "description": "Gestion des utilisateurs"
+        },
+        {
+            "name": "Auth",
+            "description": "Auth"
+        }
+    ]
+}

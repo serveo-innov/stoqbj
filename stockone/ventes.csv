@@ -1,0 +1,3 @@
+﻿"N° Facture";Date;Heure;Caissier;Client;Telephone;"Mode Paiement";"Total HT";Remise;Net;Paye;"Reste Du";Statut
+FAC-2026-00001;18/06/2026;12:35;"Rodrigue Azonwakin";"Francois Gbedo";+22997000002;cash;1500.00;0.00;1500.00;5000.00;0.00;completed
+FAC-2026-00002;18/06/2026;23:40;"Rodrigue Azonwakin";"Francois Gbedo";+22997000002;credit;5000.00;0.00;5000.00;3000.00;2000.00;completed
