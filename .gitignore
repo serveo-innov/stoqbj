@@ -22,3 +22,7 @@ stockone-front/.vite/
 .DS_Store
 Thumbs.db
 *.log
+stockone/facture-orange.pdf
+stockone/facture-preview.pdf
+stockone/ventes.csv
+stockone/paths)
