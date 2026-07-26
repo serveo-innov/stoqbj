@@ -20,9 +20,6 @@ class SaleController extends Controller
 {
     use ResolvesShopId;
 
-    /**
-     * Valider une vente complète (Gros / Détail / Extra / Mixte)
-     */
     #[OA\Post(
         path: '/sales',
         summary: 'Créer une vente (POS)',
@@ -92,7 +89,8 @@ class SaleController extends Controller
             'extra_identity.remarks' => ['nullable', 'string'],
         ]);
 
-        // Vérifier stock disponible pour chaque item
+        // Verifier stock disponible pour chaque item (stock_qty est deja
+        // le stock reel converti a ce niveau, quel que soit le niveau vendu)
         foreach ($validated['items'] as $item) {
             $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
                 ->findOrFail($item['product_unit_id']);
@@ -106,14 +104,12 @@ class SaleController extends Controller
 
         DB::beginTransaction();
         try {
-            // Calcul totaux
             $totalAmount    = collect($validated['items'])->sum(fn($i) => $i['unit_price'] * $i['quantity']);
             $discountAmount = $validated['discount_amount'] ?? 0;
             $netAmount      = $totalAmount - $discountAmount;
             $amountPaid     = $validated['amount_paid'] ?? ($validated['payment_mode'] === 'cash' ? $netAmount : 0);
             $amountDue      = max(0, $netAmount - $amountPaid);
 
-            // Créer la vente
             $sale = Sale::create([
                 'shop_id'         => $shopId,
                 'user_id'         => $user->id,
@@ -129,10 +125,8 @@ class SaleController extends Controller
                 'sold_at'         => now(),
             ]);
 
-            // Générer numéro facture
             $sale->update(['invoice_number' => $sale->generateInvoiceNumber()]);
 
-            // Créer les lignes de vente + déduire stock
             foreach ($validated['items'] as $item) {
                 $unit = ProductUnit::find($item['product_unit_id']);
 
@@ -145,13 +139,10 @@ class SaleController extends Controller
                     'total_price'     => $item['unit_price'] * $item['quantity'],
                 ]);
 
-                // Déduire le stock
-                $stockBefore = $unit->stock_qty;
-                $stockAfter  = $stockBefore - $item['quantity'];
-                $unit->update([
-                    'stock_qty'    => $stockAfter,
-                    'last_sold_at' => now(),
-                ]);
+                // Deduire le stock : converti et applique sur l'unite de
+                // base, quel que soit le niveau vendu (Piece/Paquet/Carton).
+                $result = $unit->applyStockDelta(-$item['quantity'], allowNegative: true);
+                $unit->update(['last_sold_at' => now()]);
 
                 StockMovement::create([
                     'shop_id'         => $shopId,
@@ -160,13 +151,12 @@ class SaleController extends Controller
                     'sale_id'         => $sale->id,
                     'type'            => 'sale',
                     'quantity'        => -$item['quantity'],
-                    'stock_before'    => $stockBefore,
-                    'stock_after'     => $stockAfter,
+                    'stock_before'    => $result['unit_before'],
+                    'stock_after'     => $result['unit_after'],
                     'moved_at'        => now(),
                 ]);
             }
 
-            // Identité acheteur Extra
             if (! empty($validated['extra_identity'])) {
                 ExtraSaleIdentity::create([
                     'sale_id'   => $sale->id,
@@ -177,12 +167,10 @@ class SaleController extends Controller
                 ]);
             }
 
-            // Crédit si payment_mode = credit ou mixed avec montant dû
             if ($amountDue > 0 && in_array($validated['payment_mode'], ['credit', 'mixed'])) {
                 $shop       = $user->shop ?? $sale->shop;
                 $creditDays = $shop->default_credit_days ?? 7;
 
-                // Créer ou récupérer le client
                 $clientId = $validated['client_id'] ?? null;
                 if (! $clientId && ! empty($validated['extra_identity'])) {
                     $client = Client::firstOrCreate(
@@ -224,9 +212,6 @@ class SaleController extends Controller
         }
     }
 
-    /**
-     * Liste des ventes
-     */
     #[OA\Get(
         path: '/sales',
         summary: 'Liste des ventes',
@@ -249,7 +234,6 @@ class SaleController extends Controller
             ->with(['user', 'client', 'items'])
             ->orderByDesc('sold_at');
 
-        // Caissier ne voit que ses propres ventes du jour
         if ($user->isCaissier()) {
             $query->where('user_id', $user->id)->today();
         }
@@ -262,9 +246,6 @@ class SaleController extends Controller
         return response()->json($query->paginate(50));
     }
 
-    /**
-     * Détail d'une vente
-     */
     #[OA\Get(
         path: '/sales/{id}',
         summary: 'Détail d\'une vente',
@@ -284,9 +265,6 @@ class SaleController extends Controller
         return response()->json(['data' => $sale]);
     }
 
-    /**
-     * Mettre une vente en attente (Hold)
-     */
     #[OA\Post(
         path: '/sales/{id}/hold',
         summary: 'Mettre en attente',
@@ -306,9 +284,6 @@ class SaleController extends Controller
         return response()->json(['message' => 'Vente mise en attente.', 'data' => $sale]);
     }
 
-    /**
-     * Annuler une vente (remet le stock)
-     */
     #[OA\Post(
         path: '/sales/{id}/cancel',
         summary: 'Annuler une vente',
@@ -335,13 +310,9 @@ class SaleController extends Controller
 
         DB::beginTransaction();
         try {
-            // Remettre le stock
             foreach ($sale->items as $item) {
-                $unit        = $item->productUnit;
-                $stockBefore = $unit->stock_qty;
-                $stockAfter  = $stockBefore + $item->quantity;
-
-                $unit->update(['stock_qty' => $stockAfter]);
+                $unit   = $item->productUnit;
+                $result = $unit->applyStockDelta($item->quantity, allowNegative: true);
 
                 StockMovement::create([
                     'shop_id'         => $shopId,
@@ -350,8 +321,8 @@ class SaleController extends Controller
                     'sale_id'         => $sale->id,
                     'type'            => 'return',
                     'quantity'        => $item->quantity,
-                    'stock_before'    => $stockBefore,
-                    'stock_after'     => $stockAfter,
+                    'stock_before'    => $result['unit_before'],
+                    'stock_after'     => $result['unit_after'],
                     'reason'          => 'Annulation vente #' . $sale->invoice_number,
                     'moved_at'        => now(),
                 ]);
@@ -371,9 +342,6 @@ class SaleController extends Controller
         }
     }
 
-    /**
-     * Résumé des ventes du jour
-     */
     #[OA\Get(
         path: '/sales/summary/today',
         summary: 'Résumé des ventes du jour',

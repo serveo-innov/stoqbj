@@ -104,6 +104,9 @@ Route::prefix('v1')->group(function () {
             Route::put('products/{id}',            [ProductController::class, 'update']);
             Route::delete('products/{id}',         [ProductController::class, 'destroy']);
             Route::put('products/{id}/units/{unitId}/price', [ProductController::class, 'updatePrice']);
+            Route::post('products/{id}/units', [ProductController::class, 'addUnit']);
+            Route::put('products/{id}/units/{unitId}', [ProductController::class, 'updateUnit']);
+            Route::delete('products/{id}/units/{unitId}', [ProductController::class, 'deleteUnit']);
             Route::post('stock/adjustment',  [StockController::class, 'adjustment']);
 
             Route::post('credits/{id}/doubtful', [CreditController::class, 'markDoubtful']);

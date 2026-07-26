@@ -55,10 +55,7 @@ class StockController extends Controller
 
         DB::beginTransaction();
         try {
-            $stockBefore = $unit->stock_qty;
-            $stockAfter  = $stockBefore + $validated['quantity'];
-
-            $unit->update(['stock_qty' => $stockAfter]);
+            $result = $unit->applyStockDelta($validated['quantity'], allowNegative: true);
 
             StockMovement::create([
                 'shop_id'         => $shopId,
@@ -67,8 +64,8 @@ class StockController extends Controller
                 'supplier_id'     => $validated['supplier_id'] ?? null,
                 'type'            => 'entry',
                 'quantity'        => $validated['quantity'],
-                'stock_before'    => $stockBefore,
-                'stock_after'     => $stockAfter,
+                'stock_before'    => $result['unit_before'],
+                'stock_after'     => $result['unit_after'],
                 'unit_cost'       => $validated['unit_cost'] ?? null,
                 'reference'       => $validated['reference'] ?? null,
                 'reason'          => $validated['reason'] ?? 'Reapprovisionnement',
@@ -77,9 +74,9 @@ class StockController extends Controller
 
             DB::commit();
             return response()->json([
-                'message'      => "Stock mis a jour : {$stockBefore} => {$stockAfter}",
-                'stock_before' => $stockBefore,
-                'stock_after'  => $stockAfter,
+                'message'      => "Stock mis a jour : {$result['unit_before']} => {$result['unit_after']}",
+                'stock_before' => $result['unit_before'],
+                'stock_after'  => $result['unit_after'],
                 'unit'         => $unit->fresh(),
             ]);
 
@@ -125,18 +122,9 @@ class StockController extends Controller
         $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
             ->findOrFail($validated['product_unit_id']);
 
-        $stockBefore = $unit->stock_qty;
-        $stockAfter  = $stockBefore + $validated['quantity'];
-
-        if ($stockAfter < 0) {
-            return response()->json([
-                'message' => "Stock insuffisant. Stock actuel : {$stockBefore}, ajustement : {$validated['quantity']}.",
-            ], 422);
-        }
-
         DB::beginTransaction();
         try {
-            $unit->update(['stock_qty' => $stockAfter]);
+            $result = $unit->applyStockDelta($validated['quantity'], allowNegative: false);
 
             StockMovement::create([
                 'shop_id'         => $shopId,
@@ -144,20 +132,25 @@ class StockController extends Controller
                 'user_id'         => $request->user()->id,
                 'type'            => $validated['type'],
                 'quantity'        => $validated['quantity'],
-                'stock_before'    => $stockBefore,
-                'stock_after'     => $stockAfter,
+                'stock_before'    => $result['unit_before'],
+                'stock_after'     => $result['unit_after'],
                 'reason'          => $validated['reason'],
                 'moved_at'        => now(),
             ]);
 
             DB::commit();
             return response()->json([
-                'message'      => "Ajustement effectue : {$stockBefore} => {$stockAfter}",
-                'stock_before' => $stockBefore,
-                'stock_after'  => $stockAfter,
+                'message'      => "Ajustement effectue : {$result['unit_before']} => {$result['unit_after']}",
+                'stock_before' => $result['unit_before'],
+                'stock_after'  => $result['unit_after'],
                 'unit'         => $unit->fresh(),
             ]);
 
+        } catch (\RuntimeException $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => "Stock insuffisant pour cet ajustement.",
+            ], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
             throw $e;
@@ -206,8 +199,8 @@ class StockController extends Controller
 
         $units = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId)->where('is_active', true))
             ->with('product.category')
-            ->where('stock_qty', '<=', DB::raw('stock_alert_threshold'))
             ->get()
+            ->filter(fn($unit) => $unit->stock_qty <= $unit->stock_alert_threshold)
             ->map(fn($unit) => [
                 'product_unit_id'       => $unit->id,
                 'product_name'          => $unit->product->name,
@@ -216,7 +209,8 @@ class StockController extends Controller
                 'stock_qty'             => $unit->stock_qty,
                 'stock_alert_threshold' => $unit->stock_alert_threshold,
                 'status'                => $unit->isOutOfStock() ? 'out_of_stock' : 'low_stock',
-            ]);
+            ])
+            ->values();
 
         return response()->json(['data' => $units, 'count' => $units->count()]);
     }
