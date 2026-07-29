@@ -40,7 +40,7 @@ const Subscription: React.FC = () => {
   const [error,   setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [sdkReady,  setSdkReady]  = useState(false);
+  const [, setSdkReady]  = useState(false);
   const [paying,    setPaying]    = useState(false); // widget ouvert, en attente du callback
   const [confirming,setConfirming]= useState(false); // appel /confirm en cours
 
@@ -125,7 +125,7 @@ const Subscription: React.FC = () => {
 
       // On (re)branche le listener à chaque paiement pour capturer la bonne réponse
       window.addSuccessListener?.(handleSuccess);
-      window.addFailedListener?.((err: any) => {
+      window.addFailedListener?.((_err: any) => {
         setError('Le paiement a échoué ou a été annulé.');
         setPaying(false);
       });

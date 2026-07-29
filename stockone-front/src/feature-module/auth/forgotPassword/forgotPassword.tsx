@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../core/services/apiService';
 import { all_routes } from '../../router/all_routes';
+import logo from '../../../assets/logo-64.png';
 
 const ForgotPassword: React.FC = () => {
   const [email,   setEmail]   = useState('');
@@ -24,68 +25,164 @@ const ForgotPassword: React.FC = () => {
   };
 
   return (
-    <div className="d-flex align-items-center justify-content-center flex-column"
-         style={{ minHeight: '100vh', background: '#fff7ed' }}>
-      <div className="card border-0 shadow-sm" style={{ width: 400, borderRadius: 16 }}>
-        <div className="card-body p-4">
-          <div className="text-center mb-4">
-            <span style={{ color: '#1a1a1a', fontWeight: 800, fontSize: 22 }}>
-              Stock<span style={{ color: '#F97316' }}>.one</span>
-            </span>
+    <div className="main-wrapper">
+      <div className="login-content">
+        <div className="row g-0">
+
+          {/* -- Panneau gauche -- Visuel Stoq -- */}
+          <div className="col-lg-6 login-bg d-none d-lg-flex flex-column justify-content-center">
+            <div className="login-brand">
+              <div className="brand-logo">
+                <div className="brand-icon" style={{ background: 'transparent' }}>
+                  <img src={logo} alt="Stoq" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+                <div className="brand-name">
+                  Stoq<span>.bj</span>
+                </div>
+              </div>
+
+              <p className="brand-tagline">
+                La plateforme de gestion de stocks pour papeteries en Afrique de l'Ouest
+              </p>
+
+              <div className="login-features">
+                <div className="feature-item">
+                  <div className="feature-icon">
+                    <i className="ti ti-shopping-cart" />
+                  </div>
+                  <div className="feature-text">
+                    <h6>Caisse POS intuitive</h6>
+                    <p>Ventes Gros, Detail & Extra en quelques clics</p>
+                  </div>
+                </div>
+                <div className="feature-item">
+                  <div className="feature-icon">
+                    <i className="ti ti-chart-bar" />
+                  </div>
+                  <div className="feature-text">
+                    <h6>Rapports en temps reel</h6>
+                    <p>KPIs, CA quotidien et analyse des ventes</p>
+                  </div>
+                </div>
+                <div className="feature-item">
+                  <div className="feature-icon">
+                    <i className="ti ti-credit-card" />
+                  </div>
+                  <div className="feature-text">
+                    <h6>Gestion des credits</h6>
+                    <p>Suivi des debiteurs et relances automatiques</p>
+                  </div>
+                </div>
+                <div className="feature-item">
+                  <div className="feature-icon">
+                    <i className="ti ti-package" />
+                  </div>
+                  <div className="feature-text">
+                    <h6>Stocks intelligents</h6>
+                    <p>Alertes, produits dormants et suggestions IA</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {sent ? (
-            <div className="text-center">
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%', background: '#f0fdf4',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
-              }}>
-                <i className="ti ti-mail-check" style={{ fontSize: 26, color: '#16a34a' }}/>
+          {/* -- Panneau droit -- Formulaire -- */}
+          <div className="col-lg-6 login-wrap-bg">
+            <div className="login-wrapper">
+              <div className="loginbox">
+
+                <div className="login-logo d-lg-none">
+                  <div className="logo-icon" style={{ background: 'transparent' }}>
+                    <img src={logo} alt="Stoq" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <div className="logo-text">Stoq<span>.bj</span></div>
+                </div>
+
+                {sent ? (
+                  <div className="text-center">
+                    <div style={{
+                      width: 56, height: 56, borderRadius: '50%', background: '#f0fdf4',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+                    }}>
+                      <i className="ti ti-mail-check" style={{ fontSize: 26, color: '#16a34a' }} />
+                    </div>
+                    <h1 style={{ fontSize: 22 }}>Email envoye</h1>
+                    <p className="login-subtitle">
+                      Si un compte existe avec l'adresse <strong>{email}</strong>, un email de reinitialisation
+                      vient d'etre envoye. Verifiez votre boite de reception (et vos spams).
+                    </p>
+                    <Link to={all_routes.login} className="btn-login mt-3">
+                      Retour a la connexion
+                      <i className="ti ti-arrow-right" />
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <h1>Mot de passe oublie ?</h1>
+                    <p className="login-subtitle">
+                      Entrez votre email professionnel, nous vous enverrons un lien pour reinitialiser votre mot de passe.
+                    </p>
+
+                    {error && (
+                      <div className="login-error">
+                        <i className="ti ti-alert-circle" />
+                        {error}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="login-form mt-3">
+                      <div className="mb-4">
+                        <label className="form-label">
+                          Adresse email <span className="text-danger">*</span>
+                        </label>
+                        <div className="input-group-login">
+                          <input
+                            type="email"
+                            className="form-control"
+                            placeholder="admin@maboutique.bj"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            autoComplete="email"
+                            autoFocus
+                          />
+                          <span className="input-icon">
+                            <i className="ti ti-mail" />
+                          </span>
+                        </div>
+                      </div>
+
+                      <button type="submit" className="btn-login" disabled={sending}>
+                        {sending ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm" role="status" />
+                            Envoi...
+                          </>
+                        ) : (
+                          <>
+                            Envoyer le lien
+                            <i className="ti ti-arrow-right" />
+                          </>
+                        )}
+                      </button>
+                    </form>
+
+                    <div className="text-center mt-3">
+                      <Link to={all_routes.login} className="fs-13 text-orange">
+                        <i className="ti ti-arrow-left me-1" />Retour a la connexion
+                      </Link>
+                    </div>
+                  </>
+                )}
+
+                <div className="auth-footer">
+                  <span>Stoq.bj</span> -- Gestion de stocks pour papeteries<br />
+                  Benin / Afrique de l'Ouest &nbsp;|&nbsp; v1.0.0
+                </div>
               </div>
-              <h5 className="fw-700 mb-2">Email envoyé</h5>
-              <p className="fs-13 text-muted mb-4">
-                Si un compte existe avec l'adresse <strong>{email}</strong>, un email de réinitialisation
-                vient d'être envoyé. Vérifiez votre boîte de réception (et vos spams).
-              </p>
-              <Link to={all_routes.login} className="btn w-100"
-                style={{ background:'#F97316', color:'#fff', border:'none', borderRadius:8, padding:'10px', fontWeight:600 }}>
-                Retour à la connexion
-              </Link>
             </div>
-          ) : (
-            <>
-              <h5 className="fw-700 mb-1">Mot de passe oublié ?</h5>
-              <p className="fs-13 text-muted mb-4">
-                Entrez votre email professionnel, nous vous enverrons un lien pour réinitialiser votre mot de passe.
-              </p>
+          </div>
 
-              {error && (
-                <div className="alert mb-3" style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,color:'#dc2626',fontSize:13}}>
-                  <i className="ti ti-alert-circle me-2"/>{error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label fs-13 fw-600">Email</label>
-                  <input type="email" className="form-control" required
-                    placeholder="admin@maboutique.bj"
-                    value={email} onChange={e => setEmail(e.target.value)}
-                    style={{borderColor:'#e5e7eb',borderRadius:8,padding:'10px 12px'}}/>
-                </div>
-                <button type="submit" className="btn w-100" disabled={sending}
-                  style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,padding:'10px',fontWeight:600}}>
-                  {sending ? <><span className="spinner-border spinner-border-sm me-2"/>Envoi...</> : 'Envoyer le lien'}
-                </button>
-              </form>
-
-              <div className="text-center mt-3">
-                <Link to={all_routes.login} className="fs-13" style={{color:'#6b7280',textDecoration:'none'}}>
-                  <i className="ti ti-arrow-left me-1"/>Retour à la connexion
-                </Link>
-              </div>
-            </>
-          )}
         </div>
       </div>
     </div>

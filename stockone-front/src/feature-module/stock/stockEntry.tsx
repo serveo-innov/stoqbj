@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../core/services/apiService';
 
 interface ProductUnit {
@@ -16,6 +17,10 @@ interface Supplier {
 }
 
 const StockEntry: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedUnitId = searchParams.get('unit');
+
   const [units,     setUnits]     = useState<ProductUnit[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading,   setLoading]   = useState(true);
@@ -23,6 +28,7 @@ const StockEntry: React.FC = () => {
   const [success,   setSuccess]   = useState<string | null>(null);
   const [error,     setError]     = useState<string | null>(null);
   const [search,    setSearch]    = useState('');
+  const [justUpdatedId, setJustUpdatedId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     product_unit_id: '',
@@ -42,7 +48,6 @@ const StockEntry: React.FC = () => {
         api.get<{ data: any[] }>('/products'),
         api.get<{ data: Supplier[] }>('/suppliers'),
       ]);
-      // Extraire toutes les unités avec info produit
       const allUnits: ProductUnit[] = [];
       prodRes.data.forEach((p: any) => {
         p.units.forEach((u: any) => {
@@ -51,6 +56,16 @@ const StockEntry: React.FC = () => {
       });
       setUnits(allUnits);
       setSuppliers(suppRes.data);
+
+      // Si on arrive depuis "Entrée stock" sur un produit précis (?unit=ID),
+      // on préselectionne cette unité et on filtre la liste dessus.
+      if (preselectedUnitId) {
+        const match = allUnits.find(u => u.id === Number(preselectedUnitId));
+        if (match) {
+          setForm(f => ({ ...f, product_unit_id: preselectedUnitId }));
+          setSearch(match.product.name);
+        }
+      }
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -77,8 +92,10 @@ const StockEntry: React.FC = () => {
       if (form.reference)   payload.reference   = form.reference;
 
       const res = await api.post<any>('/stock/entry', payload);
-      setSuccess(`Stock mis à jour : ${res.stock_before} → ${res.stock_after} unités`);
-      setForm({ product_unit_id:'', quantity:'', supplier_id:'', unit_cost:'', reference:'', reason:'Réapprovisionnement' });
+      setSuccess(`Stock mis a jour : ${res.stock_before} -> ${res.stock_after} unites`);
+      setJustUpdatedId(Number(form.product_unit_id));
+      setTimeout(() => setJustUpdatedId(null), 4000);
+      setForm(f => ({ ...f, quantity:'', supplier_id:'', unit_cost:'', reference:'', reason:'Réapprovisionnement' }));
       loadData();
       setTimeout(() => setSuccess(null), 4000);
     } catch (e: any) { setError(e.message); }
@@ -89,10 +106,16 @@ const StockEntry: React.FC = () => {
     <div>
       <div className="page-header">
         <div>
-          <h4 className="page-title">Entrée de stock</h4>
+          <h4 className="page-title d-flex align-items-center gap-2">
+            <button className="btn btn-sm" onClick={() => navigate(-1)}
+              style={{background:'#f3f4f6',border:'none',borderRadius:8}}>
+              <i className="ti ti-arrow-left"/>
+            </button>
+            Entree de stock
+          </h4>
           <ol className="breadcrumb mb-0">
             <li className="breadcrumb-item fs-13 text-muted">Stock</li>
-            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Entrée</li>
+            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Entree</li>
           </ol>
         </div>
       </div>
@@ -118,7 +141,7 @@ const StockEntry: React.FC = () => {
             <div className="card-body">
               <h6 className="fw-700 mb-3 d-flex align-items-center gap-2">
                 <div style={{width:4,height:20,background:'#F97316',borderRadius:2}}/>
-                Enregistrer une entrée
+                Enregistrer une entree
               </h6>
 
               {loading ? (
@@ -127,9 +150,8 @@ const StockEntry: React.FC = () => {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit}>
-                  {/* Sélection produit */}
                   <div className="mb-3">
-                    <label className="form-label fs-13 fw-600">Produit / Unité <span className="text-danger">*</span></label>
+                    <label className="form-label fs-13 fw-600">Produit / Unite <span className="text-danger">*</span></label>
                     <div className="position-relative mb-2">
                       <input type="text" className="form-control" placeholder="Rechercher..."
                         value={search} onChange={e => setSearch(e.target.value)}
@@ -141,16 +163,22 @@ const StockEntry: React.FC = () => {
                       value={form.product_unit_id}
                       onChange={e => setForm(f=>({...f,product_unit_id:e.target.value}))}
                       style={{borderColor:'#e5e7eb',borderRadius:8}}>
-                      <option value="">Sélectionner une unité...</option>
+                      <option value="">Selectionner une unite...</option>
                       {filteredUnits.map(u => (
                         <option key={u.id} value={u.id}>
                           {u.product.name} — {u.label} (Stock: {u.stock_qty})
                         </option>
                       ))}
                     </select>
+                    {preselectedUnitId && search && (
+                      <div className="fs-12 mt-1" style={{color:'#F97316'}}>
+                        <i className="ti ti-filter me-1"/>Filtre sur ce produit —
+                        <button type="button" className="btn btn-link btn-sm p-0 ms-1" style={{color:'#F97316',textDecoration:'underline'}}
+                          onClick={() => setSearch('')}>voir tous les produits</button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Info unité sélectionnée */}
                   {selectedUnit && (
                     <div className="p-3 mb-3 rounded-3 d-flex align-items-center gap-3"
                       style={{background:'#fff7ed',border:'1px solid #FED7AA'}}>
@@ -165,21 +193,19 @@ const StockEntry: React.FC = () => {
                         <div className="fw-600 fs-13">{selectedUnit.product.name}</div>
                         <div className="fs-12 text-muted">{selectedUnit.label}</div>
                         <div className="fs-12 mt-1">
-                          Stock actuel : <strong style={{color:'#F97316'}}>{selectedUnit.stock_qty}</strong> unités
+                          Stock actuel : <strong style={{color:'#F97316'}}>{selectedUnit.stock_qty}</strong> unites
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Quantité */}
                   <div className="mb-3">
-                    <label className="form-label fs-13 fw-600">Quantité <span className="text-danger">*</span></label>
+                    <label className="form-label fs-13 fw-600">Quantite <span className="text-danger">*</span></label>
                     <input type="number" className="form-control" min="1" placeholder="0"
                       value={form.quantity} onChange={e => setForm(f=>({...f,quantity:e.target.value}))}
                       required style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
 
-                  {/* Fournisseur */}
                   <div className="mb-3">
                     <label className="form-label fs-13 fw-600">Fournisseur</label>
                     <select className="form-select"
@@ -191,7 +217,6 @@ const StockEntry: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Prix d'achat & référence */}
                   <div className="row g-2 mb-3">
                     <div className="col-6">
                       <label className="form-label fs-13 fw-600">Prix unitaire (FCFA)</label>
@@ -200,14 +225,13 @@ const StockEntry: React.FC = () => {
                         style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                     </div>
                     <div className="col-6">
-                      <label className="form-label fs-13 fw-600">Réf. bon livraison</label>
+                      <label className="form-label fs-13 fw-600">Ref. bon livraison</label>
                       <input type="text" className="form-control" placeholder="BL-2026-001"
                         value={form.reference} onChange={e => setForm(f=>({...f,reference:e.target.value}))}
                         style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                     </div>
                   </div>
 
-                  {/* Raison */}
                   <div className="mb-4">
                     <label className="form-label fs-13 fw-600">Motif</label>
                     <select className="form-select"
@@ -226,7 +250,7 @@ const StockEntry: React.FC = () => {
                     {saving ? (
                       <><span className="spinner-border spinner-border-sm me-2"/>Enregistrement...</>
                     ) : (
-                      <><i className="ti ti-arrow-down-circle me-2"/>Enregistrer l'entrée</>
+                      <><i className="ti ti-arrow-down-circle me-2"/>Enregistrer l'entree</>
                     )}
                   </button>
                 </form>
@@ -235,14 +259,13 @@ const StockEntry: React.FC = () => {
           </div>
         </div>
 
-        {/* Liste des produits avec stock */}
         <div className="col-xl-7">
           <div className="card border-0 shadow-sm">
             <div className="card-body p-0">
               <div className="p-3 border-bottom" style={{borderColor:'#e5e7eb'}}>
                 <h6 className="fw-700 mb-0 d-flex align-items-center gap-2">
                   <div style={{width:4,height:20,background:'#1a1a1a',borderRadius:2}}/>
-                  État des stocks
+                  Etat des stocks
                 </h6>
               </div>
               <div className="table-responsive">
@@ -250,7 +273,7 @@ const StockEntry: React.FC = () => {
                   <thead style={{background:'#f8f9fa'}}>
                     <tr>
                       <th className="fs-12 fw-600 border-0 ps-3">Produit</th>
-                      <th className="fs-12 fw-600 border-0">Unité</th>
+                      <th className="fs-12 fw-600 border-0">Unite</th>
                       <th className="fs-12 fw-600 border-0 text-center">Stock</th>
                       <th className="fs-12 fw-600 border-0">Statut</th>
                     </tr>
@@ -262,8 +285,14 @@ const StockEntry: React.FC = () => {
                       const color  = isOut ? '#dc2626' : isLow ? '#EA580C' : '#16a34a';
                       const bg     = isOut ? '#fef2f2' : isLow ? '#fff7ed' : '#f0fdf4';
                       const label  = isOut ? 'Rupture' : isLow ? 'Bas' : 'Normal';
+                      const isJustUpdated = u.id === justUpdatedId;
                       return (
-                        <tr key={u.id} style={{cursor:'pointer'}}
+                        <tr key={u.id} style={{
+                          cursor:'pointer',
+                          transition:'background-color 0.5s ease',
+                          background: isJustUpdated ? '#fff7ed' : 'transparent',
+                          boxShadow: isJustUpdated ? 'inset 3px 0 0 #F97316' : 'none',
+                        }}
                           onClick={() => setForm(f=>({...f,product_unit_id:String(u.id)}))}>
                           <td className="ps-3 align-middle fw-600 fs-13">{u.product.name}</td>
                           <td className="align-middle fs-13">{u.label}</td>

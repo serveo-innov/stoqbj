@@ -17,7 +17,6 @@ type RootState = ReturnType<typeof store.getState>;
 const RequireActiveShop: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const user          = useSelector((state: RootState) => state.auth.user);
   const activeShopId  = useSelector((state: RootState) => state.activeShop.activeShopId);
-  const activeShopName= useSelector((state: RootState) => state.activeShop.activeShopName);
 
   const needsShopSelection = user?.role === 'super_admin' && !activeShopId;
 

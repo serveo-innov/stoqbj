@@ -14,7 +14,6 @@ const AppHeader: React.FC = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const miniSidebar = useSelector((state: RootState) => state.sidebarSlice.miniSidebar);
   const activeShopId   = useSelector((state: RootState) => state.activeShop.activeShopId);
   const activeShopName = useSelector((state: RootState) => state.activeShop.activeShopName);
 

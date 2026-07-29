@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../core/services/apiService';
 import { all_routes } from '../router/all_routes';
@@ -40,7 +40,7 @@ const Products: React.FC = () => {
   const [form, setForm] = useState({
     name: '', reference: '', barcode: '', description: '', category_id: '',
     units: [
-      { level: 1, label: 'Unité', qty_in_parent: 1, price_wholesale: '', price_extra: '', cost_price: '', stock_qty: 0, stock_alert_threshold: 5, is_divisible: false, is_sellable: true }
+      { level: 1, label: 'UnitÃ©', qty_in_parent: 1, price_wholesale: '', price_detail: '', price_extra: '', cost_price: '', stock_qty: 0, stock_alert_threshold: 5, is_divisible: false, is_sellable: true }
     ]
   });
   const [categories, setCategories] = useState<any[]>([]);
@@ -74,8 +74,8 @@ const Products: React.FC = () => {
     setForm(f => ({
       ...f,
       units: [...f.units, {
-        level: nextLevel, label: nextLevel === 2 ? 'Boîte' : 'Carton',
-        qty_in_parent: 10, price_wholesale: '', price_extra: '', cost_price: '',
+        level: nextLevel, label: nextLevel === 2 ? 'BoÃ®te' : 'Carton',
+        qty_in_parent: 10, price_wholesale: '', price_detail: '', price_extra: '', cost_price: '',
         stock_qty: 0, stock_alert_threshold: 2, is_divisible: true, is_sellable: true
       }]
     }));
@@ -106,19 +106,20 @@ const Products: React.FC = () => {
         units: form.units.map(u => ({
           ...u,
           price_wholesale: Number(u.price_wholesale),
+          price_detail:    Number(u.price_detail),
           price_extra:     Number(u.price_extra),
           cost_price:      Number(u.cost_price),
         }))
       });
-      setSuccess('Produit créé avec succès !');
+      setSuccess('Produit crÃ©Ã© avec succÃ¨s !');
       setShowModal(false);
       setForm({
         name:'', reference:'', barcode:'', description:'', category_id:'',
-        units:[{ level:1, label:'Unité', qty_in_parent:1, price_wholesale:'', price_extra:'', cost_price:'', stock_qty:0, stock_alert_threshold:5, is_divisible:false, is_sellable:true }]
+        units:[{ level:1, label:'UnitÃ©', qty_in_parent:1, price_wholesale:'', price_detail:'', price_extra:'', cost_price:'', stock_qty:0, stock_alert_threshold:5, is_divisible:false, is_sellable:true }]
       });
       loadProducts();
       setTimeout(() => setSuccess(null), 3000);
-    } catch (e: any) { setError(e.message || 'Erreur lors de la création'); }
+    } catch (e: any) { setError(e.message || 'Erreur lors de la crÃ©ation'); }
     finally { setSaving(false); }
   };
 
@@ -164,7 +165,7 @@ const Products: React.FC = () => {
           <div className="row align-items-center g-2">
             <div className="col-md-6">
               <div className="position-relative">
-                <input type="text" className="form-control" placeholder="Rechercher un produit, référence..."
+                <input type="text" className="form-control" placeholder="Rechercher un produit, rÃ©fÃ©rence..."
                   value={search} onChange={e => setSearch(e.target.value)}
                   style={{paddingLeft:40,borderColor:'#e5e7eb',borderRadius:8}}/>
                 <i className="ti ti-search position-absolute" style={{left:12,top:'50%',transform:'translateY(-50%)',color:'#9ca3af'}}/>
@@ -191,12 +192,12 @@ const Products: React.FC = () => {
           ) : filtered.length === 0 ? (
             <div className="text-center py-5">
               <i className="ti ti-package d-block mb-2" style={{fontSize:48,color:'#d1d5db'}}/>
-              <p className="text-muted fs-14">{search ? 'Aucun produit trouvé' : 'Aucun produit créé'}</p>
+              <p className="text-muted fs-14">{search ? 'Aucun produit trouvÃ©' : 'Aucun produit crÃ©Ã©'}</p>
               {!search && (
                 <button className="btn btn-sm mt-2"
                   style={{background:'#F97316',color:'#fff',borderRadius:8}}
                   onClick={() => setShowModal(true)}>
-                  <i className="ti ti-plus me-1"/>Créer le premier produit
+                  <i className="ti ti-plus me-1"/>CrÃ©er le premier produit
                 </button>
               )}
             </div>
@@ -206,8 +207,8 @@ const Products: React.FC = () => {
                 <thead style={{background:'#f8f9fa'}}>
                   <tr>
                     <th className="fs-12 fw-600 border-0 ps-3">Produit</th>
-                    <th className="fs-12 fw-600 border-0">Catégorie</th>
-                    <th className="fs-12 fw-600 border-0">Unité</th>
+                    <th className="fs-12 fw-600 border-0">CatÃ©gorie</th>
+                    <th className="fs-12 fw-600 border-0">UnitÃ©</th>
                     <th className="fs-12 fw-600 border-0">Stock</th>
                     <th className="fs-12 fw-600 border-0">Prix Gros</th>
                     <th className="fs-12 fw-600 border-0">Prix Extra</th>
@@ -223,7 +224,7 @@ const Products: React.FC = () => {
                           <td className="ps-3 align-middle" rowSpan={product.units.length} style={{cursor:'pointer'}}
                             onClick={() => navigate(all_routes.productDetail.replace(':id', String(product.id)))}>
                             <div className="fw-600 fs-13">{product.name}</div>
-                            {product.reference && <div className="fs-11 text-muted">Réf: {product.reference}</div>}
+                            {product.reference && <div className="fs-11 text-muted">RÃ©f: {product.reference}</div>}
                           </td>
                         )}
                         {ui === 0 && (
@@ -232,7 +233,7 @@ const Products: React.FC = () => {
                               <span className="badge" style={{background:`${product.category.color}20`,color:product.category.color,border:`1px solid ${product.category.color}40`,fontSize:11}}>
                                 {product.category.name}
                               </span>
-                            ) : <span className="text-muted fs-12">—</span>}
+                            ) : <span className="text-muted fs-12">â€”</span>}
                           </td>
                         )}
                         <td className="align-middle">
@@ -255,7 +256,7 @@ const Products: React.FC = () => {
                           <td className="align-middle text-end pe-3" rowSpan={product.units.length}>
                             <div className="d-flex align-items-center justify-content-end gap-1">
                               <Link to={`${all_routes.stockEntry}?unit=${product.units[0]?.id}`}
-                                className="btn btn-sm" title="Entrée stock"
+                                className="btn btn-sm" title="EntrÃ©e stock"
                                 style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 8px'}}>
                                 <i className="ti ti-arrow-down-circle" style={{color:'#F97316'}}/>
                               </Link>
@@ -303,14 +304,14 @@ const Products: React.FC = () => {
                           value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} required/>
                       </div>
                       <div className="col-md-4">
-                        <label className="form-label fs-13 fw-600">Catégorie</label>
+                        <label className="form-label fs-13 fw-600">CatÃ©gorie</label>
                         <select className="form-select" value={form.category_id} onChange={e => setForm(f=>({...f,category_id:e.target.value}))}>
-                          <option value="">Sans catégorie</option>
+                          <option value="">Sans catÃ©gorie</option>
                           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
                       <div className="col-md-4">
-                        <label className="form-label fs-13 fw-600">Référence</label>
+                        <label className="form-label fs-13 fw-600">RÃ©fÃ©rence</label>
                         <input type="text" className="form-control" placeholder="REF-001"
                           value={form.reference} onChange={e => setForm(f=>({...f,reference:e.target.value}))}/>
                       </div>
@@ -325,7 +326,7 @@ const Products: React.FC = () => {
                   <div className="p-3 rounded-3" style={{background:'#fff7ed',border:'1px solid #FED7AA'}}>
                     <div className="d-flex align-items-center justify-content-between mb-3">
                       <h6 className="fw-600 mb-0 fs-13" style={{color:'#EA580C'}}>
-                        Unités de conditionnement ({form.units.length}/3)
+                        UnitÃ©s de conditionnement ({form.units.length}/3)
                       </h6>
                       {form.units.length < 3 && (
                         <button type="button" className="btn btn-sm"
@@ -341,7 +342,7 @@ const Products: React.FC = () => {
                         <div className="card-body p-3">
                           <div className="d-flex align-items-center justify-content-between mb-2">
                             <span className="fw-600 fs-13">
-                              Niveau {unit.level} {idx===0?'(Unité de base)':idx===1?'(Intermédiaire)':'(Gros)'}
+                              Niveau {unit.level} {idx===0?'(UnitÃ© de base)':idx===1?'(IntermÃ©diaire)':'(Gros)'}
                             </span>
                             {idx > 0 && (
                               <button type="button" className="btn btn-sm text-danger p-0" onClick={() => removeUnit(idx)}>
@@ -352,25 +353,39 @@ const Products: React.FC = () => {
                           <div className="row g-2">
                             <div className="col-md-4">
                               <label className="form-label fs-12 fw-600">Label <span className="text-danger">*</span></label>
-                              <input type="text" className="form-control form-control-sm" placeholder="ex: Pièce"
+                              <input type="text" className="form-control form-control-sm" placeholder="ex: PiÃ¨ce"
                                 value={unit.label} onChange={e => updateUnit(idx,'label',e.target.value)} required/>
                             </div>
                             {idx > 0 && (
                               <div className="col-md-4">
-                                <label className="form-label fs-12 fw-600">Qté dans parent <span className="text-danger">*</span></label>
+                                <label className="form-label fs-12 fw-600">QtÃ© dans parent <span className="text-danger">*</span></label>
                                 <input type="number" className="form-control form-control-sm" min="1"
                                   value={unit.qty_in_parent} onChange={e => updateUnit(idx,'qty_in_parent',Number(e.target.value))} required/>
                               </div>
                             )}
-                            <div className="col-md-4">
-                              <label className="form-label fs-12 fw-600">Stock initial</label>
-                              <input type="number" className="form-control form-control-sm" min="0"
-                                value={unit.stock_qty} onChange={e => updateUnit(idx,'stock_qty',Number(e.target.value))}/>
-                            </div>
+                            {idx === 0 ? (
+                              <div className="col-md-4">
+                                <label className="form-label fs-12 fw-600">Stock initial</label>
+                                <input type="number" className="form-control form-control-sm" min="0"
+                                  value={unit.stock_qty} onChange={e => updateUnit(idx,'stock_qty',Number(e.target.value))}/>
+                              </div>
+                            ) : (
+                              <div className="col-md-4">
+                                <label className="form-label fs-12 fw-600">Stock</label>
+                                <div className="fs-12 text-muted mt-2">
+                                  <i className="ti ti-calculator me-1"/>Calcule depuis le Niveau 1
+                                </div>
+                              </div>
+                            )}
                             <div className="col-md-4">
                               <label className="form-label fs-12 fw-600">Prix Gros <span className="text-danger">*</span></label>
                               <input type="number" className="form-control form-control-sm" min="0" placeholder="0"
                                 value={unit.price_wholesale} onChange={e => updateUnit(idx,'price_wholesale',e.target.value)} required/>
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label fs-12 fw-600">Prix Detail <span className="text-danger">*</span></label>
+                              <input type="number" className="form-control form-control-sm" min="0" placeholder="0"
+                                value={unit.price_detail} onChange={e => updateUnit(idx,'price_detail',e.target.value)} required/>
                             </div>
                             <div className="col-md-4">
                               <label className="form-label fs-12 fw-600">Prix Extra <span className="text-danger">*</span></label>
@@ -399,7 +414,7 @@ const Products: React.FC = () => {
                     onClick={() => setShowModal(false)}>Annuler</button>
                   <button type="submit" className="btn btn-sm px-4" disabled={saving}
                     style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
-                    {saving ? <><span className="spinner-border spinner-border-sm me-1"/>Enregistrement...</> : <><i className="ti ti-check me-1"/>Créer le produit</>}
+                    {saving ? <><span className="spinner-border spinner-border-sm me-1"/>Enregistrement...</> : <><i className="ti ti-check me-1"/>CrÃ©er le produit</>}
                   </button>
                 </div>
               </form>

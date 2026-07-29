@@ -340,3 +340,27 @@ a { color: $primary; text-decoration: none; &:hover { color: $primary-dark; } }
   .page-wrapper { margin-left: 0 !important; }
   .sidebar-overlay { display: block; }
 }
+
+// ── Fix scroll modals contenant un <form> (bug structurel Bootstrap) ──
+.modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// -- Fix scroll modals contenant un <form> (bug structurel Bootstrap) --
+.modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Fix scroll modals contenant un form
+.modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}

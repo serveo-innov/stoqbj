@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../core/services/apiService';
 
@@ -10,6 +10,7 @@ interface ProductUnit {
   stock_qty: number;
   stock_alert_threshold: number;
   price_wholesale: string;
+  price_detail: string;
   price_extra: string;
   cost_price: string;
   margin_percent?: number;
@@ -45,7 +46,7 @@ interface Movement {
 }
 
 const typeConfig: Record<string, { label: string; color: string; bg: string }> = {
-  entry:        { label:'Entrée',      color:'#16a34a', bg:'#f0fdf4' },
+  entry:        { label:'EntrÃ©e',      color:'#16a34a', bg:'#f0fdf4' },
   sale:         { label:'Vente',       color:'#F97316', bg:'#fff7ed' },
   adjustment:   { label:'Ajustement', color:'#0891b2', bg:'#ecfeff' },
   return:       { label:'Retour',      color:'#7c3aed', bg:'#f5f3ff' },
@@ -54,8 +55,15 @@ const typeConfig: Record<string, { label: string; color: string; bg: string }> =
   inventory:    { label:'Inventaire',  color:'#6b7280', bg:'#f3f4f6' },
 };
 
+const levelName = (level: number) => level === 1 ? '(Unite de base)' : level === 2 ? '(Intermediaire)' : '(Gros)';
+
 const fmt = (n: string | number) => new Intl.NumberFormat('fr-FR').format(Number(n)) + ' F';
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Jamais';
+
+const emptyUnitForm = {
+  label: '', qty_in_parent: 1, price_wholesale: '', price_extra: '', cost_price: '',
+  stock_alert_threshold: 5, is_divisible: true, is_sellable: true,
+};
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -72,12 +80,18 @@ const ProductDetailPage: React.FC = () => {
   const [savingInfo,   setSavingInfo]   = useState(false);
 
   const [priceTarget, setPriceTarget] = useState<ProductUnit | null>(null);
-  const [priceForm,   setPriceForm]   = useState({ price_wholesale:'', price_extra:'', cost_price:'', reason:'manual', notes:'' });
+  const [priceForm,   setPriceForm]   = useState({ price_wholesale:'', price_detail:'', price_extra:'', cost_price:'', reason:'manual', notes:'' });
   const [savingPrice, setSavingPrice] = useState(false);
 
   const [movementsUnit, setMovementsUnit] = useState<ProductUnit | null>(null);
   const [movements,      setMovements]      = useState<Movement[]>([]);
   const [loadingMovements, setLoadingMovements] = useState(false);
+
+  // Gestion des niveaux (ajout / modification / suppression)
+  const [unitModal,   setUnitModal]   = useState<'add' | 'edit' | null>(null);
+  const [unitTarget,  setUnitTarget]  = useState<ProductUnit | null>(null);
+  const [unitForm,    setUnitForm]    = useState(emptyUnitForm);
+  const [savingUnit,  setSavingUnit]  = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -120,7 +134,7 @@ const ProductDetailPage: React.FC = () => {
         description: infoForm.description || null,
         is_active: infoForm.is_active,
       });
-      setSuccess('Produit modifié.');
+      setSuccess('Produit modifiÃ©.');
       setEditingInfo(false);
       load();
       setTimeout(() => setSuccess(null), 3000);
@@ -131,7 +145,7 @@ const ProductDetailPage: React.FC = () => {
   const openPriceEdit = (unit: ProductUnit) => {
     setPriceTarget(unit);
     setPriceForm({
-      price_wholesale: unit.price_wholesale, price_extra: unit.price_extra,
+      price_wholesale: unit.price_wholesale, price_detail: unit.price_detail, price_extra: unit.price_extra,
       cost_price: unit.cost_price, reason:'manual', notes:'',
     });
     setError(null);
@@ -145,12 +159,13 @@ const ProductDetailPage: React.FC = () => {
     try {
       await api.put(`/products/${product.id}/units/${priceTarget.id}/price`, {
         price_wholesale: Number(priceForm.price_wholesale),
+        price_detail: Number(priceForm.price_detail),
         price_extra: Number(priceForm.price_extra),
         cost_price: Number(priceForm.cost_price),
         reason: priceForm.reason,
         notes: priceForm.notes || undefined,
       });
-      setSuccess('Prix mis à jour.');
+      setSuccess('Prix mis Ã  jour.');
       setPriceTarget(null);
       load();
       setTimeout(() => setSuccess(null), 3000);
@@ -168,6 +183,91 @@ const ProductDetailPage: React.FC = () => {
     finally { setLoadingMovements(false); }
   };
 
+  // â”€â”€ Gestion des niveaux â”€â”€
+
+  const openAddUnit = () => {
+    setUnitForm(emptyUnitForm);
+    setUnitModal('add');
+    setError(null);
+  };
+
+  const openEditUnit = (unit: ProductUnit) => {
+    setUnitTarget(unit);
+    setUnitForm({
+      label: unit.label,
+      qty_in_parent: unit.qty_in_parent,
+      price_wholesale: '', price_extra: '', cost_price: '',
+      stock_alert_threshold: unit.stock_alert_threshold,
+      is_divisible: unit.is_divisible,
+      is_sellable: unit.is_sellable,
+    });
+    setUnitModal('edit');
+    setError(null);
+  };
+
+  const handleAddUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!product) return;
+    setSavingUnit(true);
+    setError(null);
+    try {
+      const nextLevel = product.units.length + 1;
+      await api.post(`/products/${product.id}/units`, {
+        level: nextLevel,
+        label: unitForm.label,
+        qty_in_parent: unitForm.qty_in_parent,
+        price_wholesale: Number(unitForm.price_wholesale),
+        price_extra: Number(unitForm.price_extra),
+        cost_price: Number(unitForm.cost_price),
+        stock_alert_threshold: unitForm.stock_alert_threshold,
+        is_divisible: unitForm.is_divisible,
+        is_sellable: unitForm.is_sellable,
+      });
+      setSuccess('Niveau ajoutÃ©.');
+      setUnitModal(null);
+      load();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingUnit(false); }
+  };
+
+  const handleEditUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!product || !unitTarget) return;
+    setSavingUnit(true);
+    setError(null);
+    try {
+      await api.put(`/products/${product.id}/units/${unitTarget.id}`, {
+        label: unitForm.label,
+        qty_in_parent: unitForm.qty_in_parent,
+        stock_alert_threshold: unitForm.stock_alert_threshold,
+        is_divisible: unitForm.is_divisible,
+        is_sellable: unitForm.is_sellable,
+      });
+      setSuccess('Niveau modifiÃ©.');
+      setUnitModal(null);
+      load();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingUnit(false); }
+  };
+
+  const handleDeleteUnit = async (unit: ProductUnit) => {
+    if (!product) return;
+    if (!window.confirm(`Supprimer definitivement le niveau "${unit.label}" ?`)) return;
+    setError(null);
+    try {
+      await api.delete(`/products/${product.id}/units/${unit.id}`);
+      setSuccess('Niveau supprimÃ©.');
+      load();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      // 409 (historique existant) ou 422 (niveau intermediaire avec enfant) :
+      // le message du backend est deja clair, on l'affiche tel quel.
+      setError(e.message);
+    }
+  };
+
   if (loading) {
     return <div className="text-center py-5"><div className="spinner-border" style={{color:'#F97316'}} role="status"/></div>;
   }
@@ -182,6 +282,8 @@ const ProductDetailPage: React.FC = () => {
 
   if (!product) return null;
 
+  const canAddUnit = product.units.length < 3;
+
   return (
     <div>
       <div className="page-header">
@@ -193,7 +295,7 @@ const ProductDetailPage: React.FC = () => {
             </button>
             {product.name}
             {!product.is_active && (
-              <span className="badge" style={{background:'#f3f4f6',color:'#6b7280',fontSize:11}}>Archivé</span>
+              <span className="badge" style={{background:'#f3f4f6',color:'#6b7280',fontSize:11}}>ArchivÃ©</span>
             )}
           </h4>
           <ol className="breadcrumb mb-0">
@@ -226,19 +328,19 @@ const ProductDetailPage: React.FC = () => {
         <div className="card-body">
           <div className="row g-3">
             <div className="col-md-3">
-              <div className="fs-11 text-muted">Catégorie</div>
-              <div className="fs-13 fw-600">{product.category?.name || 'Sans catégorie'}</div>
+              <div className="fs-11 text-muted">CatÃ©gorie</div>
+              <div className="fs-13 fw-600">{product.category?.name || 'Sans catÃ©gorie'}</div>
             </div>
             <div className="col-md-3">
-              <div className="fs-11 text-muted">Référence</div>
-              <div className="fs-13 fw-600">{product.reference || '—'}</div>
+              <div className="fs-11 text-muted">RÃ©fÃ©rence</div>
+              <div className="fs-13 fw-600">{product.reference || 'â€”'}</div>
             </div>
             <div className="col-md-3">
               <div className="fs-11 text-muted">Code-barres</div>
-              <div className="fs-13 fw-600">{product.barcode || '—'}</div>
+              <div className="fs-13 fw-600">{product.barcode || 'â€”'}</div>
             </div>
             <div className="col-md-3">
-              <div className="fs-11 text-muted">Nb unités</div>
+              <div className="fs-11 text-muted">Nb unitÃ©s</div>
               <div className="fs-13 fw-600">{product.units.length}</div>
             </div>
           </div>
@@ -251,8 +353,18 @@ const ProductDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Unités */}
-      <h6 className="fw-700 mb-2 text-muted fs-13" style={{textTransform:'uppercase',letterSpacing:0.5}}>Unités de vente</h6>
+      {/* UnitÃ©s */}
+      <div className="d-flex align-items-center justify-content-between mb-2">
+        <h6 className="fw-700 mb-0 text-muted fs-13" style={{textTransform:'uppercase',letterSpacing:0.5}}>
+          UnitÃ©s de vente ({product.units.length}/3)
+        </h6>
+        {canAddUnit && (
+          <button className="btn btn-sm" onClick={openAddUnit}
+            style={{background:'#F97316',color:'#fff',border:'none',borderRadius:6,fontSize:12,padding:'4px 10px'}}>
+            <i className="ti ti-plus me-1"/>Ajouter niveau
+          </button>
+        )}
+      </div>
       <div className="row g-3 mb-4">
         {product.units.sort((a,b) => a.level - b.level).map(unit => {
           const isOut = unit.stock_qty <= 0;
@@ -264,18 +376,52 @@ const ProductDetailPage: React.FC = () => {
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div>
-                      <span className="badge mb-1" style={{background:'#fff7ed',color:'#F97316',fontSize:10}}>Niveau {unit.level}</span>
+                      <span className="badge mb-1" style={{background:'#fff7ed',color:'#F97316',fontSize:10}}>
+                        Niveau {unit.level} {levelName(unit.level)}
+                      </span>
                       <div className="fw-700 fs-14">{unit.label}</div>
                     </div>
-                    <span className="badge" style={{background:`${stockColor}15`,color:stockColor,fontSize:11}}>
-                      {unit.stock_qty} en stock
-                    </span>
+                    <div className="d-flex align-items-center gap-1">
+                      <span className="badge" style={{background:`${stockColor}15`,color:stockColor,fontSize:11}}>
+                        {unit.stock_qty} en stock
+                      </span>
+                      <div className="dropdown">
+                        <button className="btn btn-sm p-1" data-bs-toggle="dropdown"
+                          style={{background:'#f3f4f6',border:'none',borderRadius:6}}>
+                          <i className="ti ti-dots-vertical fs-14"/>
+                        </button>
+                        <ul className="dropdown-menu dropdown-menu-end">
+                          <li>
+                            <button className="dropdown-item fs-13" onClick={() => openEditUnit(unit)}>
+                              <i className="ti ti-edit me-2"/>Modifier le niveau
+                            </button>
+                          </li>
+                          {unit.level > 1 && (
+                            <li>
+                              <button className="dropdown-item fs-13 text-danger" onClick={() => handleDeleteUnit(unit)}>
+                                <i className="ti ti-trash me-2"/>Supprimer le niveau
+                              </button>
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
                   </div>
+
+                  {unit.level > 1 && (
+                    <div className="fs-11 text-muted mb-2">
+                      1 {unit.label} = {unit.qty_in_parent} unitÃ©(s) du niveau {unit.level - 1}
+                    </div>
+                  )}
 
                   <div className="row g-2 mb-2">
                     <div className="col-6">
                       <div className="fs-11 text-muted">Prix gros</div>
                       <div className="fs-13 fw-600">{fmt(unit.price_wholesale)}</div>
+                    </div>
+                    <div className="col-6">
+                      <div className="fs-11 text-muted">Prix detail</div>
+                      <div className="fs-13 fw-600">{fmt(unit.price_detail)}</div>
                     </div>
                     <div className="col-6">
                       <div className="fs-11 text-muted">Prix extra</div>
@@ -288,12 +434,12 @@ const ProductDetailPage: React.FC = () => {
                     <div className="col-6">
                       <div className="fs-11 text-muted">Marge</div>
                       <div className="fs-13" style={{color:'#16a34a'}}>
-                        {unit.margin_percent !== undefined ? `${unit.margin_percent}%` : '—'}
+                        {unit.margin_percent !== undefined ? `${unit.margin_percent}%` : 'â€”'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="fs-11 text-muted mb-2">Dernière vente : {fmtDate(unit.last_sold_at)}</div>
+                  <div className="fs-11 text-muted mb-2">DerniÃ¨re vente : {fmtDate(unit.last_sold_at)}</div>
 
                   <div className="d-flex gap-2">
                     <button className="btn btn-sm flex-fill" onClick={() => openPriceEdit(unit)}
@@ -312,7 +458,7 @@ const ProductDetailPage: React.FC = () => {
         })}
       </div>
 
-      {/* Modal édition infos */}
+      {/* Modal Ã©dition infos */}
       {editingInfo && (
         <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)'}}>
           <div className="modal-dialog">
@@ -334,16 +480,16 @@ const ProductDetailPage: React.FC = () => {
                       onChange={e => setInfoForm(f=>({...f,name:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
                   <div className="mb-2">
-                    <label className="form-label fs-13 fw-600">Catégorie</label>
+                    <label className="form-label fs-13 fw-600">CatÃ©gorie</label>
                     <select className="form-select" value={infoForm.category_id}
                       onChange={e => setInfoForm(f=>({...f,category_id:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}>
-                      <option value="">Sans catégorie</option>
+                      <option value="">Sans catÃ©gorie</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div className="row g-2 mb-2">
                     <div className="col-6">
-                      <label className="form-label fs-13 fw-600">Référence</label>
+                      <label className="form-label fs-13 fw-600">RÃ©fÃ©rence</label>
                       <input className="form-control" value={infoForm.reference}
                         onChange={e => setInfoForm(f=>({...f,reference:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                     </div>
@@ -377,13 +523,13 @@ const ProductDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal édition prix */}
+      {/* Modal Ã©dition prix */}
       {priceTarget && (
         <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)'}}>
           <div className="modal-dialog">
             <div className="modal-content" style={{borderRadius:12,border:'none'}}>
               <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
-                <h5 className="modal-title fw-700"><i className="ti ti-currency-franc me-2" style={{color:'#F97316'}}/>Prix — {priceTarget.label}</h5>
+                <h5 className="modal-title fw-700"><i className="ti ti-currency-franc me-2" style={{color:'#F97316'}}/>Prix â€” {priceTarget.label}</h5>
                 <button className="btn-close" onClick={() => setPriceTarget(null)}/>
               </div>
               <form onSubmit={handleSavePrice}>
@@ -399,6 +545,13 @@ const ProductDetailPage: React.FC = () => {
                       <input type="number" className="form-control" min={0} value={priceForm.price_wholesale}
                         onChange={e => setPriceForm(f=>({...f,price_wholesale:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                     </div>
+                    <div className="col-6">
+                      <label className="form-label fs-13 fw-600">Prix detail</label>
+                      <input type="number" className="form-control" min={0} value={priceForm.price_detail}
+                        onChange={e => setPriceForm(f=>({...f,price_detail:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    </div>
+                  </div>
+                  <div className="row g-2 mb-2">
                     <div className="col-6">
                       <label className="form-label fs-13 fw-600">Prix extra</label>
                       <input type="number" className="form-control" min={0} value={priceForm.price_extra}
@@ -438,20 +591,103 @@ const ProductDetailPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal ajout / edition niveau */}
+      {unitModal && (
+        <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)'}}>
+          <div className="modal-dialog">
+            <div className="modal-content" style={{borderRadius:12,border:'none'}}>
+              <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
+                <h5 className="modal-title fw-700">
+                  <i className="ti ti-stack-2 me-2" style={{color:'#F97316'}}/>
+                  {unitModal === 'add' ? `Ajouter le niveau ${product.units.length + 1}` : `Modifier â€” ${unitTarget?.label}`}
+                </h5>
+                <button className="btn-close" onClick={() => setUnitModal(null)}/>
+              </div>
+              <form onSubmit={unitModal === 'add' ? handleAddUnit : handleEditUnit}>
+                <div className="modal-body">
+                  {error && (
+                    <div className="alert mb-3" style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,color:'#dc2626',fontSize:13}}>
+                      <i className="ti ti-alert-circle me-2"/>{error}
+                    </div>
+                  )}
+                  <div className="row g-2 mb-2">
+                    <div className="col-md-6">
+                      <label className="form-label fs-13 fw-600">Label <span className="text-danger">*</span></label>
+                      <input className="form-control" required placeholder="ex: Boite, Carton"
+                        value={unitForm.label} onChange={e => setUnitForm(f=>({...f,label:e.target.value}))}
+                        style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label fs-13 fw-600">Qte dans le niveau du dessous <span className="text-danger">*</span></label>
+                      <input type="number" className="form-control" min={1} required
+                        value={unitForm.qty_in_parent} onChange={e => setUnitForm(f=>({...f,qty_in_parent:Number(e.target.value)}))}
+                        style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    </div>
+                  </div>
+
+                  {unitModal === 'add' && (
+                    <div className="row g-2 mb-2">
+                      <div className="col-md-4">
+                        <label className="form-label fs-13 fw-600">Prix gros <span className="text-danger">*</span></label>
+                        <input type="number" className="form-control" min={0} required
+                          value={unitForm.price_wholesale} onChange={e => setUnitForm(f=>({...f,price_wholesale:e.target.value}))}
+                          style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fs-13 fw-600">Prix extra <span className="text-danger">*</span></label>
+                        <input type="number" className="form-control" min={0} required
+                          value={unitForm.price_extra} onChange={e => setUnitForm(f=>({...f,price_extra:e.target.value}))}
+                          style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                      </div>
+                      <div className="col-md-4">
+                        <label className="form-label fs-13 fw-600">Prix achat <span className="text-danger">*</span></label>
+                        <input type="number" className="form-control" min={0} required
+                          value={unitForm.cost_price} onChange={e => setUnitForm(f=>({...f,cost_price:e.target.value}))}
+                          style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mb-2">
+                    <label className="form-label fs-13 fw-600">Seuil alerte</label>
+                    <input type="number" className="form-control" min={0}
+                      value={unitForm.stock_alert_threshold} onChange={e => setUnitForm(f=>({...f,stock_alert_threshold:Number(e.target.value)}))}
+                      style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                  </div>
+
+                  <div className="form-check form-switch mb-1">
+                    <input className="form-check-input" type="checkbox" id="isSellable"
+                      checked={unitForm.is_sellable} onChange={e => setUnitForm(f=>({...f,is_sellable:e.target.checked}))}/>
+                    <label className="form-check-label fs-13" htmlFor="isSellable">Vendable</label>
+                  </div>
+                </div>
+                <div className="modal-footer" style={{borderTop:'1px solid #e5e7eb'}}>
+                  <button type="button" className="btn btn-sm px-4" style={{background:'#f3f4f6',border:'none',borderRadius:8}} onClick={() => setUnitModal(null)}>Annuler</button>
+                  <button type="submit" className="btn btn-sm px-4" disabled={savingUnit}
+                    style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
+                    {savingUnit ? <span className="spinner-border spinner-border-sm"/> : 'Enregistrer'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal mouvements */}
       {movementsUnit && (
         <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)'}}>
           <div className="modal-dialog modal-lg">
             <div className="modal-content" style={{borderRadius:12,border:'none'}}>
               <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
-                <h5 className="modal-title fw-700"><i className="ti ti-arrows-exchange me-2" style={{color:'#F97316'}}/>Mouvements — {movementsUnit.label}</h5>
+                <h5 className="modal-title fw-700"><i className="ti ti-arrows-exchange me-2" style={{color:'#F97316'}}/>Mouvements â€” {movementsUnit.label}</h5>
                 <button className="btn-close" onClick={() => setMovementsUnit(null)}/>
               </div>
               <div className="modal-body p-0">
                 {loadingMovements ? (
                   <div className="text-center py-5"><div className="spinner-border" style={{color:'#F97316'}} role="status"/></div>
                 ) : movements.length === 0 ? (
-                  <div className="text-center py-5"><p className="text-muted">Aucun mouvement enregistré</p></div>
+                  <div className="text-center py-5"><p className="text-muted">Aucun mouvement enregistrÃ©</p></div>
                 ) : (
                   <div className="table-responsive">
                     <table className="table table-hover mb-0">
@@ -459,8 +695,8 @@ const ProductDetailPage: React.FC = () => {
                         <tr>
                           <th className="fs-12 fw-600 border-0 ps-3">Date</th>
                           <th className="fs-12 fw-600 border-0">Type</th>
-                          <th className="fs-12 fw-600 border-0 text-center">Qté</th>
-                          <th className="fs-12 fw-600 border-0 text-center">Avant → Après</th>
+                          <th className="fs-12 fw-600 border-0 text-center">QtÃ©</th>
+                          <th className="fs-12 fw-600 border-0 text-center">Avant â†’ AprÃ¨s</th>
                           <th className="fs-12 fw-600 border-0 pe-3">Utilisateur</th>
                         </tr>
                       </thead>
@@ -476,7 +712,7 @@ const ProductDetailPage: React.FC = () => {
                               <td className="align-middle text-center fw-700" style={{color: m.quantity > 0 ? '#16a34a' : '#dc2626'}}>
                                 {m.quantity > 0 ? '+' : ''}{m.quantity}
                               </td>
-                              <td className="align-middle text-center fs-13 text-muted">{m.stock_before} → {m.stock_after}</td>
+                              <td className="align-middle text-center fs-13 text-muted">{m.stock_before} â†’ {m.stock_after}</td>
                               <td className="align-middle pe-3 fs-12">{m.user?.firstname} {m.user?.name}</td>
                             </tr>
                           );

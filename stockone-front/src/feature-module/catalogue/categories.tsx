@@ -10,6 +10,12 @@ interface Category {
   products_count: number;
 }
 
+const ICON_OPTIONS = [
+  'ti-book', 'ti-notebook', 'ti-pencil', 'ti-ballpen', 'ti-eraser',
+  'ti-ruler', 'ti-scissors', 'ti-paint', 'ti-palette', 'ti-folder',
+  'ti-briefcase', 'ti-box', 'ti-package', 'ti-tag', 'ti-category',
+];
+
 const Categories: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -17,7 +23,8 @@ const Categories: React.FC = () => {
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [success,    setSuccess]    = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', color: '#F97316', icon: '' });
+  const [editingId,  setEditingId]  = useState<number | null>(null);
+  const [form, setForm] = useState({ name: '', color: '#F97316', icon: 'ti-category' });
 
   useEffect(() => { load(); }, []);
 
@@ -30,15 +37,33 @@ const Categories: React.FC = () => {
     finally { setLoading(false); }
   };
 
+  const openCreateModal = () => {
+    setEditingId(null);
+    setForm({ name: '', color: '#F97316', icon: 'ti-category' });
+    setShowModal(true);
+  };
+
+  const openEditModal = (cat: Category) => {
+    setEditingId(cat.id);
+    setForm({ name: cat.name, color: cat.color, icon: cat.icon || 'ti-category' });
+    setShowModal(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await api.post('/categories', form);
-      setSuccess('Catégorie créée !');
+      if (editingId) {
+        await api.put(`/categories/${editingId}`, form);
+        setSuccess('Categorie modifiee !');
+      } else {
+        await api.post('/categories', form);
+        setSuccess('Categorie creee !');
+      }
       setShowModal(false);
-      setForm({ name: '', color: '#F97316', icon: '' });
+      setEditingId(null);
+      setForm({ name: '', color: '#F97316', icon: 'ti-category' });
       load();
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) { setError(e.errors?.name?.[0] || e.message); }
@@ -52,22 +77,33 @@ const Categories: React.FC = () => {
     } catch (e: any) { setError(e.message); }
   };
 
+  const handleDelete = async (cat: Category) => {
+    if (cat.products_count > 0) return;
+    if (!window.confirm(`Supprimer definitivement la categorie "${cat.name}" ?`)) return;
+    try {
+      await api.delete(`/categories/${cat.id}`);
+      setSuccess('Categorie supprimee.');
+      load();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) { setError(e.message); }
+  };
+
   const colors = ['#F97316','#EA580C','#1a1a1a','#16a34a','#0891b2','#7c3aed','#dc2626','#d97706'];
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h4 className="page-title">Catégories</h4>
+          <h4 className="page-title">Categories</h4>
           <ol className="breadcrumb mb-0">
             <li className="breadcrumb-item fs-13 text-muted">Catalogue</li>
-            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Catégories</li>
+            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Categories</li>
           </ol>
         </div>
         <button className="btn d-flex align-items-center gap-2"
           style={{background:'#F97316',color:'#fff',borderRadius:8,padding:'8px 16px',fontWeight:600}}
-          onClick={() => setShowModal(true)}>
-          <i className="ti ti-plus fs-16"/>Nouvelle catégorie
+          onClick={openCreateModal}>
+          <i className="ti ti-plus fs-16"/>Nouvelle categorie
         </button>
       </div>
 
@@ -94,11 +130,11 @@ const Categories: React.FC = () => {
           {categories.length === 0 ? (
             <div className="col-12 text-center py-5">
               <i className="ti ti-category d-block mb-2" style={{fontSize:48,color:'#d1d5db'}}/>
-              <p className="text-muted">Aucune catégorie créée</p>
+              <p className="text-muted">Aucune categorie creee</p>
               <button className="btn btn-sm mt-2"
                 style={{background:'#F97316',color:'#fff',borderRadius:8}}
-                onClick={() => setShowModal(true)}>
-                <i className="ti ti-plus me-1"/>Créer une catégorie
+                onClick={openCreateModal}>
+                <i className="ti ti-plus me-1"/>Creer une categorie
               </button>
             </div>
           ) : categories.map(cat => (
@@ -122,9 +158,25 @@ const Categories: React.FC = () => {
                       </button>
                       <ul className="dropdown-menu dropdown-menu-end">
                         <li>
+                          <button className="dropdown-item fs-13" onClick={() => openEditModal(cat)}>
+                            <i className="ti ti-edit me-2"/>Modifier
+                          </button>
+                        </li>
+                        <li>
                           <button className="dropdown-item fs-13" onClick={() => toggleActive(cat)}>
                             <i className={`ti ${cat.is_active?'ti-eye-off':'ti-eye'} me-2`}/>
-                            {cat.is_active ? 'Désactiver' : 'Activer'}
+                            {cat.is_active ? 'Desactiver' : 'Activer'}
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className="dropdown-item fs-13 text-danger"
+                            disabled={cat.products_count > 0}
+                            title={cat.products_count > 0 ? `Desactivez plutot cette categorie, elle contient encore ${cat.products_count} produit(s)` : ''}
+                            onClick={() => handleDelete(cat)}
+                            style={cat.products_count > 0 ? {opacity:0.4,cursor:'not-allowed'} : {}}
+                          >
+                            <i className="ti ti-trash me-2"/>Supprimer
                           </button>
                         </li>
                       </ul>
@@ -156,7 +208,8 @@ const Categories: React.FC = () => {
             <div className="modal-content" style={{borderRadius:12,border:'none'}}>
               <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
                 <h5 className="modal-title fw-700">
-                  <i className="ti ti-category me-2" style={{color:'#F97316'}}/>Nouvelle catégorie
+                  <i className="ti ti-category me-2" style={{color:'#F97316'}}/>
+                  {editingId ? 'Modifier la categorie' : 'Nouvelle categorie'}
                 </h5>
                 <button className="btn-close" onClick={() => setShowModal(false)}/>
               </div>
@@ -185,10 +238,23 @@ const Categories: React.FC = () => {
                     </div>
                   </div>
                   <div className="mb-3">
-                    <label className="form-label fs-13 fw-600">Icône (optionnel)</label>
-                    <input type="text" className="form-control" placeholder="ex: ti-book"
-                      value={form.icon} onChange={e => setForm(f=>({...f,icon:e.target.value}))}/>
-                    <small className="text-muted">Icônes Tabler : ti-book, ti-pen, ti-scissors...</small>
+                    <label className="form-label fs-13 fw-600">Icone</label>
+                    <div className="d-flex gap-2 flex-wrap mt-1">
+                      {ICON_OPTIONS.map(ic => (
+                        <button key={ic} type="button"
+                          onClick={() => setForm(f=>({...f,icon:ic}))}
+                          style={{
+                            width:40, height:40, borderRadius:8,
+                            background: form.icon===ic ? `${form.color}20` : '#f8f9fa',
+                            border: form.icon===ic ? `2px solid ${form.color}` : '1px solid #e5e7eb',
+                            display:'flex', alignItems:'center', justifyContent:'center',
+                            color: form.icon===ic ? form.color : '#6b7280', fontSize:18, cursor:'pointer'
+                          }}
+                        >
+                          <i className={`ti ${ic}`}/>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="p-3 rounded-3 d-flex align-items-center gap-3"
                     style={{background:'#f8f9fa',border:'1px solid #e5e7eb'}}>
@@ -198,11 +264,11 @@ const Categories: React.FC = () => {
                       display:'flex', alignItems:'center', justifyContent:'center',
                       color:form.color, fontSize:20
                     }}>
-                      <i className={`ti ${form.icon || 'ti-category'}`}/>
+                      <i className={`ti ${form.icon}`}/>
                     </div>
                     <div>
-                      <div className="fw-600 fs-14">{form.name || 'Aperçu de la catégorie'}</div>
-                      <div className="fs-12 text-muted">Aperçu</div>
+                      <div className="fw-600 fs-14">{form.name || 'Apercu de la categorie'}</div>
+                      <div className="fs-12 text-muted">Apercu</div>
                     </div>
                   </div>
                 </div>
@@ -212,7 +278,7 @@ const Categories: React.FC = () => {
                     onClick={() => setShowModal(false)}>Annuler</button>
                   <button type="submit" className="btn btn-sm px-4" disabled={saving}
                     style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
-                    {saving ? <><span className="spinner-border spinner-border-sm me-1"/>...</> : <><i className="ti ti-check me-1"/>Créer</>}
+                    {saving ? <><span className="spinner-border spinner-border-sm me-1"/>...</> : <><i className="ti ti-check me-1"/>{editingId ? 'Enregistrer' : 'Creer'}</>}
                   </button>
                 </div>
               </form>

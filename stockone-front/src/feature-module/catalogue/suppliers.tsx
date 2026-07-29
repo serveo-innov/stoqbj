@@ -6,9 +6,13 @@ interface Supplier {
   name: string;
   phone: string | null;
   email: string | null;
+  address?: string | null;
   city: string | null;
+  notes?: string | null;
   is_active: boolean;
 }
+
+const emptyForm = { name:'', phone:'', email:'', address:'', city:'Cotonou', notes:'' };
 
 const Suppliers: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -18,7 +22,8 @@ const Suppliers: React.FC = () => {
   const [error,     setError]     = useState<string | null>(null);
   const [success,   setSuccess]   = useState<string | null>(null);
   const [search,    setSearch]    = useState('');
-  const [form, setForm] = useState({ name:'', phone:'', email:'', address:'', city:'Cotonou', notes:'' });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState(emptyForm);
 
   useEffect(() => { load(); }, []);
 
@@ -31,19 +36,54 @@ const Suppliers: React.FC = () => {
     finally { setLoading(false); }
   };
 
+  const openCreateModal = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setShowModal(true);
+  };
+
+  const openEditModal = (s: Supplier) => {
+    setEditingId(s.id);
+    setForm({
+      name: s.name,
+      phone: s.phone || '',
+      email: s.email || '',
+      address: s.address || '',
+      city: s.city || 'Cotonou',
+      notes: s.notes || '',
+    });
+    setShowModal(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await api.post('/suppliers', form);
-      setSuccess('Fournisseur créé !');
+      if (editingId) {
+        await api.put(`/suppliers/${editingId}`, form);
+        setSuccess('Fournisseur modifie !');
+      } else {
+        await api.post('/suppliers', form);
+        setSuccess('Fournisseur cree !');
+      }
       setShowModal(false);
-      setForm({ name:'', phone:'', email:'', address:'', city:'Cotonou', notes:'' });
+      setEditingId(null);
+      setForm(emptyForm);
       load();
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) { setError(e.message); }
     finally { setSaving(false); }
+  };
+
+  const handleDelete = async (s: Supplier) => {
+    if (!window.confirm(`Supprimer definitivement le fournisseur "${s.name}" ?`)) return;
+    try {
+      await api.delete(`/suppliers/${s.id}`);
+      setSuccess('Fournisseur supprime.');
+      load();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) { setError(e.message); }
   };
 
   const filtered = suppliers.filter(s =>
@@ -63,7 +103,7 @@ const Suppliers: React.FC = () => {
         </div>
         <button className="btn d-flex align-items-center gap-2"
           style={{background:'#F97316',color:'#fff',borderRadius:8,padding:'8px 16px',fontWeight:600}}
-          onClick={() => setShowModal(true)}>
+          onClick={openCreateModal}>
           <i className="ti ti-plus fs-16"/>Nouveau fournisseur
         </button>
       </div>
@@ -115,7 +155,7 @@ const Suppliers: React.FC = () => {
               <p className="text-muted">Aucun fournisseur</p>
               <button className="btn btn-sm mt-2"
                 style={{background:'#F97316',color:'#fff',borderRadius:8}}
-                onClick={() => setShowModal(true)}>
+                onClick={openCreateModal}>
                 <i className="ti ti-plus me-1"/>Ajouter un fournisseur
               </button>
             </div>
@@ -125,7 +165,7 @@ const Suppliers: React.FC = () => {
                 <thead style={{background:'#f8f9fa'}}>
                   <tr>
                     <th className="fs-12 fw-600 border-0 ps-3">Fournisseur</th>
-                    <th className="fs-12 fw-600 border-0">Téléphone</th>
+                    <th className="fs-12 fw-600 border-0">Telephone</th>
                     <th className="fs-12 fw-600 border-0">Email</th>
                     <th className="fs-12 fw-600 border-0">Ville</th>
                     <th className="fs-12 fw-600 border-0">Statut</th>
@@ -148,9 +188,9 @@ const Suppliers: React.FC = () => {
                           <span className="fw-600 fs-13">{s.name}</span>
                         </div>
                       </td>
-                      <td className="align-middle fs-13">{s.phone || '—'}</td>
-                      <td className="align-middle fs-13">{s.email || '—'}</td>
-                      <td className="align-middle fs-13">{s.city || '—'}</td>
+                      <td className="align-middle fs-13">{s.phone || '-'}</td>
+                      <td className="align-middle fs-13">{s.email || '-'}</td>
+                      <td className="align-middle fs-13">{s.city || '-'}</td>
                       <td className="align-middle">
                         <span className="badge" style={{
                           background: s.is_active ? '#f0fdf4' : '#f3f4f6',
@@ -160,10 +200,16 @@ const Suppliers: React.FC = () => {
                         </span>
                       </td>
                       <td className="align-middle text-end pe-3">
-                        <button className="btn btn-sm"
-                          style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 8px'}}>
-                          <i className="ti ti-edit" style={{color:'#1a1a1a'}}/>
-                        </button>
+                        <div className="d-flex gap-1 justify-content-end">
+                          <button className="btn btn-sm" onClick={() => openEditModal(s)}
+                            style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 8px'}}>
+                            <i className="ti ti-edit" style={{color:'#1a1a1a'}}/>
+                          </button>
+                          <button className="btn btn-sm" onClick={() => handleDelete(s)}
+                            style={{background:'#fef2f2',border:'none',borderRadius:6,padding:'4px 8px'}}>
+                            <i className="ti ti-trash" style={{color:'#dc2626'}}/>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -180,7 +226,8 @@ const Suppliers: React.FC = () => {
             <div className="modal-content" style={{borderRadius:12,border:'none'}}>
               <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
                 <h5 className="modal-title fw-700">
-                  <i className="ti ti-truck me-2" style={{color:'#F97316'}}/>Nouveau fournisseur
+                  <i className="ti ti-truck me-2" style={{color:'#F97316'}}/>
+                  {editingId ? 'Modifier le fournisseur' : 'Nouveau fournisseur'}
                 </h5>
                 <button className="btn-close" onClick={() => setShowModal(false)}/>
               </div>
@@ -195,11 +242,11 @@ const Suppliers: React.FC = () => {
                   <div className="row g-3">
                     <div className="col-12">
                       <label className="form-label fs-13 fw-600">Nom <span className="text-danger">*</span></label>
-                      <input type="text" className="form-control" placeholder="Editions Hachette Bénin"
+                      <input type="text" className="form-control" placeholder="Editions Hachette Benin"
                         value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} required/>
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label fs-13 fw-600">Téléphone</label>
+                      <label className="form-label fs-13 fw-600">Telephone</label>
                       <input type="tel" className="form-control" placeholder="+229 97 00 00 00"
                         value={form.phone} onChange={e => setForm(f=>({...f,phone:e.target.value}))}/>
                     </div>
@@ -231,7 +278,7 @@ const Suppliers: React.FC = () => {
                     onClick={() => setShowModal(false)}>Annuler</button>
                   <button type="submit" className="btn btn-sm px-4" disabled={saving}
                     style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
-                    {saving ? <><span className="spinner-border spinner-border-sm me-1"/>...</> : <><i className="ti ti-check me-1"/>Créer</>}
+                    {saving ? <><span className="spinner-border spinner-border-sm me-1"/>...</> : <><i className="ti ti-check me-1"/>{editingId ? 'Enregistrer' : 'Creer'}</>}
                   </button>
                 </div>
               </form>

@@ -1,4 +1,4 @@
-import { useSelector, useDispatch } from 'react-redux';
+﻿import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../redux/store';
 import store from '../redux/store';
 import { loginStart, loginSuccess, loginFailure, logout } from '../redux/authSlice';
@@ -27,8 +27,8 @@ export const useAuth = () => {
       if (data.user.role === 'super_admin') {
         navigate(all_routes.adminDashboard);
       } else if (data.user.role === 'caissier') {
-        // Le caissier n'a pas accès à /reports/dashboard (reserve a
-        // gerant/admin_shop/super_admin cote backend) — direction la caisse,
+        // Le caissier n'a pas accÃ¨s Ã  /reports/dashboard (reserve a
+        // gerant/admin_shop/super_admin cote backend) â€” direction la caisse,
         // son outil de travail quotidien.
         navigate(all_routes.pos);
       } else {
@@ -38,6 +38,38 @@ export const useAuth = () => {
       return data;
     } catch (error: any) {
       dispatch(loginFailure(error.message || 'Erreur de connexion'));
+      throw error;
+    }
+  };
+
+  const registerShop = async (payload: {
+    shop_name: string;
+    commercial_name?: string;
+    owner_name: string;
+    owner_firstname: string;
+    owner_phone: string;
+    owner_email: string;
+    address: string;
+    city: string;
+    neighborhood?: string;
+    password: string;
+    password_confirmation: string;
+  }) => {
+    dispatch(loginStart());
+    try {
+      const data = await api.post<{
+        message: string;
+        access_token: string;
+        user: any;
+        expires_at: string;
+      }>('/auth/register-shop', payload);
+
+      dispatch(loginSuccess({ user: data.user, token: data.access_token }));
+      navigate(all_routes.dashboard);
+
+      return data;
+    } catch (error: any) {
+      dispatch(loginFailure(error.message || 'Erreur lors de la creation de la boutique'));
       throw error;
     }
   };
@@ -64,6 +96,7 @@ export const useAuth = () => {
   return {
     ...authState,
     login,
+    registerShop,
     logout: logoutUser,
     hasPermission,
     isSuperAdmin,

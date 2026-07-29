@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { all_routes } from './all_routes';
 import RequireActiveShop from '../../core/components/RequireActiveShop';
 
@@ -43,9 +43,17 @@ const Loading = () => (
   </div>
 );
 
-const withSuspense = (Component: React.LazyExoticComponent<any>) => (
+// Definit le titre de l'onglet pour la page active
+const TitledPage: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => {
+  useEffect(() => {
+    document.title = title ? `${title} — Stoq.bj` : 'Stoq.bj';
+  }, [title]);
+  return <>{children}</>;
+};
+
+const withSuspense = (Component: React.LazyExoticComponent<any>, title: string) => (
   <Suspense fallback={<Loading />}>
-    <Component />
+    <TitledPage title={title}><Component /></TitledPage>
   </Suspense>
 );
 
@@ -53,70 +61,72 @@ const withSuspense = (Component: React.LazyExoticComponent<any>) => (
 // Ventes, Credits...) : le Super Admin y a acces (cahier des charges), mais
 // doit avoir choisi une boutique au prealable, sinon un message l'invite a
 // en choisir une plutot que de laisser la page planter.
-const withGuardedSuspense = (Component: React.LazyExoticComponent<any>) => (
+const withGuardedSuspense = (Component: React.LazyExoticComponent<any>, title: string) => (
   <Suspense fallback={<Loading />}>
-    <RequireActiveShop>
-      <Component />
-    </RequireActiveShop>
+    <TitledPage title={title}>
+      <RequireActiveShop>
+        <Component />
+      </RequireActiveShop>
+    </TitledPage>
   </Suspense>
 );
 
 // Routes publiques (auth)
 export const authRoutes = [
-  { path: all_routes.login,         element: withSuspense(Login) },
-  { path: all_routes.register,      element: withSuspense(Register) },
-  { path: all_routes.forgotPassword, element: withSuspense(ForgotPassword) },
-  { path: all_routes.setPassword,    element: withSuspense(SetPassword) },
-  { path: all_routes.error404,      element: withSuspense(Error404) },
-  { path: all_routes.error500,      element: withSuspense(Error500) },
-  { path: '*',                      element: withSuspense(Error404) },
+  { path: all_routes.login,          element: withSuspense(Login, 'Connexion') },
+  { path: all_routes.register,       element: withSuspense(Register, 'Creer un compte') },
+  { path: all_routes.forgotPassword, element: withSuspense(ForgotPassword, 'Mot de passe oublie') },
+  { path: all_routes.setPassword,    element: withSuspense(SetPassword, 'Nouveau mot de passe') },
+  { path: all_routes.error404,       element: withSuspense(Error404, 'Page introuvable') },
+  { path: all_routes.error500,       element: withSuspense(Error500, 'Erreur serveur') },
+  { path: '*',                       element: withSuspense(Error404, 'Page introuvable') },
 ];
 
 // Routes protégées (app)
 export const publicRoutes = [
   // Dashboard
-  { path: all_routes.dashboard,         element: withGuardedSuspense(Dashboard) },
+  { path: all_routes.dashboard,         element: withGuardedSuspense(Dashboard, 'Tableau de bord') },
 
   // POS
-  { path: all_routes.pos,               element: withGuardedSuspense(Pos) },
-  { path: all_routes.salesList,         element: withGuardedSuspense(SalesList) },
+  { path: all_routes.pos,               element: withGuardedSuspense(Pos, 'Caisse') },
+  { path: all_routes.salesList,         element: withGuardedSuspense(SalesList, 'Ventes') },
 
   // Catalogue
-  { path: all_routes.products,          element: withGuardedSuspense(Products) },
-  { path: all_routes.productDetail,     element: withGuardedSuspense(ProductDetail) },
-  { path: all_routes.categories,        element: withGuardedSuspense(Categories) },
-  { path: all_routes.suppliers,         element: withGuardedSuspense(Suppliers) },
+  { path: all_routes.products,          element: withGuardedSuspense(Products, 'Produits') },
+  { path: all_routes.productDetail,     element: withGuardedSuspense(ProductDetail, 'Detail produit') },
+  { path: all_routes.categories,        element: withGuardedSuspense(Categories, 'Categories') },
+  { path: all_routes.suppliers,         element: withGuardedSuspense(Suppliers, 'Fournisseurs') },
 
   // Stock
-  { path: all_routes.stockEntry,        element: withGuardedSuspense(StockEntry) },
-  { path: all_routes.stockMovements,    element: withGuardedSuspense(StockMovements) },
-  { path: all_routes.stockAlerts,       element: withGuardedSuspense(StockAlerts) },
-  { path: all_routes.inventory,         element: withGuardedSuspense(Inventory) },
+  { path: all_routes.stockEntry,        element: withGuardedSuspense(StockEntry, 'Entree de stock') },
+  { path: all_routes.stockMovements,    element: withGuardedSuspense(StockMovements, 'Mouvements de stock') },
+  { path: all_routes.stockAlerts,       element: withGuardedSuspense(StockAlerts, 'Alertes stock') },
+  { path: all_routes.inventory,         element: withGuardedSuspense(Inventory, 'Inventaire') },
 
   // Crédits
-  { path: all_routes.credits,           element: withGuardedSuspense(Credits) },
-  { path: all_routes.creditDetail,      element: withGuardedSuspense(CreditDetail) },
-  { path: all_routes.debtors,           element: withGuardedSuspense(Debtors) },
+  { path: all_routes.credits,           element: withGuardedSuspense(Credits, 'Credits') },
+  { path: all_routes.creditDetail,      element: withGuardedSuspense(CreditDetail, 'Detail credit') },
+  { path: all_routes.debtors,           element: withGuardedSuspense(Debtors, 'Debiteurs') },
 
   // Rapports
-  { path: all_routes.reports,           element: withGuardedSuspense(Reports) },
-  { path: all_routes.reportDaily,       element: withGuardedSuspense(ReportDaily) },
-  { path: all_routes.reportPeriod,      element: withGuardedSuspense(ReportPeriod) },
-  { path: all_routes.reportStock,       element: withGuardedSuspense(ReportStock) },
+  { path: all_routes.reports,           element: withGuardedSuspense(Reports, 'Rapports') },
+  { path: all_routes.reportDaily,       element: withGuardedSuspense(ReportDaily, 'Rapport quotidien') },
+  { path: all_routes.reportPeriod,      element: withGuardedSuspense(ReportPeriod, 'Rapport periodique') },
+  { path: all_routes.reportStock,       element: withGuardedSuspense(ReportStock, 'Rapport de stock') },
 
   // Alertes
-  { path: all_routes.alerts,            element: withGuardedSuspense(Alerts) },
+  { path: all_routes.alerts,            element: withGuardedSuspense(Alerts, 'Alertes') },
 
   // Utilisateurs
-  { path: all_routes.users,             element: withGuardedSuspense(Users) },
-  { path: all_routes.myProfile,         element: withSuspense(MyProfile) },
+  { path: all_routes.users,             element: withGuardedSuspense(Users, 'Utilisateurs') },
+  { path: all_routes.myProfile,         element: withSuspense(MyProfile, 'Mon profil') },
 
   // Super Admin
-  { path: all_routes.adminShops,        element: withSuspense(AdminShops) },
-  { path: all_routes.adminStats,        element: withSuspense(AdminStats) },
-  { path: all_routes.adminDashboard,    element: withSuspense(AdminStats) },
+  { path: all_routes.adminShops,        element: withSuspense(AdminShops, 'Boutiques') },
+  { path: all_routes.adminStats,        element: withSuspense(AdminStats, 'Statistiques') },
+  { path: all_routes.adminDashboard,    element: withSuspense(AdminStats, 'Tableau de bord admin') },
 
   // Paramètres
-  { path: all_routes.settings,          element: withSuspense(Settings) },
-  { path: all_routes.subscription,      element: withSuspense(Subscription) },
+  { path: all_routes.settings,          element: withSuspense(Settings, 'Parametres') },
+  { path: all_routes.subscription,      element: withSuspense(Subscription, 'Abonnement') },
 ];
