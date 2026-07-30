@@ -308,9 +308,8 @@ class ReportController extends Controller
         $stockAlerts = \App\Models\ProductUnit::whereHas('product', fn($q) =>
             $q->where('shop_id', $shopId)
         )
-        ->where('stock_qty', '<=', DB::raw('stock_alert_threshold'))
         ->with('product')
-        ->get()
+        ->get()->filter(fn($u) => $u->stock_qty <= $u->stock_alert_threshold)
         ->map(fn($u) => ['name' => $u->product->name, 'stock' => $u->stock_qty])
         ->toArray();
 

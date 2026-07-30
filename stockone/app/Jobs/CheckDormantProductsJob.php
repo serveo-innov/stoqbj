@@ -50,10 +50,9 @@ class CheckDormantProductsJob implements ShouldQueue
         $units = ProductUnit::whereHas('product', fn($q) =>
             $q->where('shop_id', $shop->id)->where('is_active', true)
         )
-        ->where('stock_qty', '>', 0)
         ->whereNotNull('last_sold_at')
         ->with('product')
-        ->get();
+        ->get()->filter(fn($u) => $u->stock_qty > 0)->values();
 
         $processed = 0;
 
