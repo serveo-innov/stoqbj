@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import api from '../../core/services/apiService';
 
 interface ShopSettings {
@@ -25,17 +25,17 @@ interface ShopSettings {
 const emptyForm = {
   commercial_name:'', owner_phone:'', owner_phone_secondary:'',
   address:'', city:'', neighborhood:'', ifu_number:'', rccm_number:'',
-  brand_color:'#F97316', slogan:'', default_credit_days:'30',
+  brand_color:'#F97316', slogan:'', default_credit_days:'7',
 };
 
 const statusLabels: Record<string, { label: string; color: string; bg: string }> = {
-  trial:     { label:'Période d\'essai', color:'#d97706', bg:'#fffbeb' },
+  trial:     { label:'PÃ©riode d\'essai', color:'#d97706', bg:'#fffbeb' },
   active:    { label:'Active',           color:'#16a34a', bg:'#f0fdf4' },
   suspended: { label:'Suspendue',        color:'#dc2626', bg:'#fef2f2' },
-  closed:    { label:'Fermée',           color:'#6b7280', bg:'#f3f4f6' },
+  closed:    { label:'FermÃ©e',           color:'#6b7280', bg:'#f3f4f6' },
 };
 
-const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
+const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR') : 'â€”';
 
 const Settings: React.FC = () => {
   const [shop,    setShop]    = useState<ShopSettings | null>(null);
@@ -64,7 +64,7 @@ const Settings: React.FC = () => {
         rccm_number: res.data.rccm_number || '',
         brand_color: res.data.brand_color || '#F97316',
         slogan: res.data.slogan || '',
-        default_credit_days: String(res.data.default_credit_days || 30),
+        default_credit_days: String(res.data.default_credit_days || 7),
       });
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
@@ -78,7 +78,7 @@ const Settings: React.FC = () => {
       const payload: any = { ...form, default_credit_days: Number(form.default_credit_days) };
       Object.keys(payload).forEach(k => { if (payload[k] === '') delete payload[k]; });
       await api.put('/settings', payload);
-      setSuccess('Paramètres enregistrés.');
+      setSuccess('ParamÃ¨tres enregistrÃ©s.');
       load();
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) { setError(e.message); }
@@ -104,10 +104,10 @@ const Settings: React.FC = () => {
     <div>
       <div className="page-header">
         <div>
-          <h4 className="page-title">Paramètres de la boutique</h4>
+          <h4 className="page-title">ParamÃ¨tres de la boutique</h4>
           <ol className="breadcrumb mb-0">
             <li className="breadcrumb-item fs-13 text-muted">Boutique</li>
-            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Paramètres</li>
+            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>ParamÃ¨tres</li>
           </ol>
         </div>
         <span className="badge" style={{background:st.bg,color:st.color,border:`1px solid ${st.color}30`,fontSize:12,padding:'6px 12px'}}>
@@ -134,13 +134,13 @@ const Settings: React.FC = () => {
         <div className="col-xl-4">
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body">
-              <h6 className="fw-700 mb-3 fs-13">Informations légales</h6>
+              <h6 className="fw-700 mb-3 fs-13">Informations lÃ©gales</h6>
               <div className="mb-2">
-                <div className="fs-11 text-muted">Nom légal</div>
+                <div className="fs-11 text-muted">Nom lÃ©gal</div>
                 <div className="fs-13 fw-600">{shop.shop_name}</div>
               </div>
               <div className="mb-2">
-                <div className="fs-11 text-muted">Propriétaire</div>
+                <div className="fs-11 text-muted">PropriÃ©taire</div>
                 <div className="fs-13 fw-600">{shop.owner_firstname} {shop.owner_name}</div>
               </div>
               <div className="mb-2">
@@ -168,11 +168,11 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
-        {/* Formulaire éditable */}
+        {/* Formulaire Ã©ditable */}
         <div className="col-xl-8">
           <div className="card border-0 shadow-sm">
             <div className="card-body">
-              <h6 className="fw-700 mb-3 fs-13">Identité commerciale</h6>
+              <h6 className="fw-700 mb-3 fs-13">IdentitÃ© commerciale</h6>
               <form onSubmit={handleSubmit}>
                 <div className="row g-2 mb-3">
                   <div className="col-md-8">
@@ -195,12 +195,12 @@ const Settings: React.FC = () => {
                 <h6 className="fw-700 mb-3 fs-13 pt-2" style={{borderTop:'1px solid #f3f4f6'}}>Contact</h6>
                 <div className="row g-2 mb-3">
                   <div className="col-md-6">
-                    <label className="form-label fs-13 fw-600">Téléphone principal</label>
+                    <label className="form-label fs-13 fw-600">TÃ©lÃ©phone principal</label>
                     <input className="form-control" value={form.owner_phone}
                       onChange={e => setForm(f=>({...f,owner_phone:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label fs-13 fw-600">Téléphone secondaire</label>
+                    <label className="form-label fs-13 fw-600">TÃ©lÃ©phone secondaire</label>
                     <input className="form-control" value={form.owner_phone_secondary}
                       onChange={e => setForm(f=>({...f,owner_phone_secondary:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
@@ -226,23 +226,23 @@ const Settings: React.FC = () => {
                 <h6 className="fw-700 mb-3 fs-13 pt-2" style={{borderTop:'1px solid #f3f4f6'}}>Administratif</h6>
                 <div className="row g-2 mb-3">
                   <div className="col-md-6">
-                    <label className="form-label fs-13 fw-600">N° IFU</label>
+                    <label className="form-label fs-13 fw-600">NÂ° IFU</label>
                     <input className="form-control" value={form.ifu_number}
                       onChange={e => setForm(f=>({...f,ifu_number:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label fs-13 fw-600">N° RCCM</label>
+                    <label className="form-label fs-13 fw-600">NÂ° RCCM</label>
                     <input className="form-control" value={form.rccm_number}
                       onChange={e => setForm(f=>({...f,rccm_number:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
                 </div>
 
-                <h6 className="fw-700 mb-3 fs-13 pt-2" style={{borderTop:'1px solid #f3f4f6'}}>Crédits clients</h6>
+                <h6 className="fw-700 mb-3 fs-13 pt-2" style={{borderTop:'1px solid #f3f4f6'}}>CrÃ©dits clients</h6>
                 <div className="mb-3">
-                  <label className="form-label fs-13 fw-600">Délai de crédit par défaut (jours)</label>
+                  <label className="form-label fs-13 fw-600">DÃ©lai de crÃ©dit par dÃ©faut (jours)</label>
                   <input type="number" className="form-control" min={1} max={365} style={{maxWidth:150,borderColor:'#e5e7eb',borderRadius:8}}
                     value={form.default_credit_days} onChange={e => setForm(f=>({...f,default_credit_days:e.target.value}))}/>
-                  <div className="fs-11 text-muted mt-1">Utilisé comme valeur par défaut lors de la création d'un crédit client.</div>
+                  <div className="fs-11 text-muted mt-1">UtilisÃ© comme valeur par dÃ©faut lors de la crÃ©ation d'un crÃ©dit client.</div>
                 </div>
 
                 <button type="submit" className="btn" disabled={saving}
