@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Alert;
 use App\Models\KkiapayPaymentIntent;
 use App\Models\StationeryShop;
 use App\Models\SubscriptionPayment;
@@ -17,14 +18,8 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Abonnement', description: 'Paiement d\'abonnement self-service via Kkiapay')]
 class SubscriptionController extends Controller
 {
-    /**
-     * Duree de validite d'une intention de paiement avant expiration.
-     */
     private const INTENT_EXPIRY_MINUTES = 30;
 
-    /**
-     * Client Kkiapay configure depuis les cles .env
-     */
     private function kkiapayClient(): Kkiapay
     {
         return new Kkiapay(
@@ -48,9 +43,6 @@ class SubscriptionController extends Controller
         return $shopId;
     }
 
-    /**
-     * Statut de l'abonnement de sa propre boutique + infos pour le widget de paiement
-     */
     #[OA\Get(
         path: '/subscription',
         summary: 'Statut abonnement et config du widget de paiement',
@@ -76,13 +68,6 @@ class SubscriptionController extends Controller
         ]);
     }
 
-    /**
-     * Initier une intention de paiement : genere une reference unique liee a la
-     * boutique, a transmettre au widget Kkiapay (champ "data"), puis a renvoyer
-     * telle quelle lors de la confirmation. Ceci lie la demande de paiement a la
-     * boutique qui l'a initiee, independamment de ce que Kkiapay renvoie ou non
-     * dans verifyTransaction().
-     */
     #[OA\Post(
         path: '/subscription/kkiapay/initiate',
         summary: 'Initier une intention de paiement Kkiapay',
@@ -94,8 +79,6 @@ class SubscriptionController extends Controller
     {
         $shopId = $this->resolveOwnShopId($request);
 
-        // Invalide les intentions pending precedentes de cette boutique pour eviter
-        // l'accumulation (une seule intention active a la fois par boutique).
         KkiapayPaymentIntent::where('shop_id', $shopId)
             ->where('status', 'pending')
             ->update(['status' => 'expired']);
@@ -116,20 +99,6 @@ class SubscriptionController extends Controller
         ]);
     }
 
-    /**
-     * Confirmer un paiement Kkiapay et activer/prolonger l'abonnement.
-     *
-     * Double verification :
-     * 1. L'intention de paiement (generee par /initiate) doit exister, appartenir
-     *    a la boutique du demandeur, etre encore valide (non expiree, non deja
-     *    consommee). C'est la garantie principale, independante de Kkiapay.
-     * 2. La transaction elle-meme est revérifiee aupres de Kkiapay via la cle
-     *    privee (statut + montant). Si la reponse de Kkiapay contient un champ
-     *    permettant de recouper la reference d'intention (selon version d'API),
-     *    on l'exploite en verification complementaire stricte ; sinon on se
-     *    contente de (1) + (2) sans bloquer, mais on logue l'absence de
-     *    corroboration pour audit.
-     */
     #[OA\Post(
         path: '/subscription/kkiapay/confirm',
         summary: 'Confirmer un paiement Kkiapay et activer l\'abonnement',
@@ -160,7 +129,6 @@ class SubscriptionController extends Controller
             'intent_reference' => ['required', 'string', 'max:64'],
         ]);
 
-        // ── Verification 1 : l'intention doit etre valide ET appartenir a CETTE boutique ──
         $intent = KkiapayPaymentIntent::where('reference', $validated['intent_reference'])
             ->where('shop_id', $shopId)
             ->first();
@@ -177,7 +145,6 @@ class SubscriptionController extends Controller
             return response()->json(['message' => 'Cette intention de paiement a expire ou a deja ete utilisee. Relancez un paiement.'], 422);
         }
 
-        // ── Idempotence : si cette transaction a deja ete traitee, ne pas la rejouer ──
         $alreadyProcessed = SubscriptionPayment::where('transaction_ref', $validated['transaction_id'])->exists();
         if ($alreadyProcessed) {
             return response()->json([
@@ -186,7 +153,6 @@ class SubscriptionController extends Controller
             ]);
         }
 
-        // ── Verification 2 : revalidation autoritative aupres de Kkiapay ──
         try {
             $transaction = $this->kkiapayClient()->verifyTransaction($validated['transaction_id']);
         } catch (\Throwable $e) {
@@ -197,8 +163,6 @@ class SubscriptionController extends Controller
         $status = $transaction->status ?? ($transaction['status'] ?? null);
         $amount = $transaction->amount ?? ($transaction['amount'] ?? null);
 
-        // Recuperation best-effort du champ "data" passe au widget, s'il est
-        // renvoye par cette version de l'API Kkiapay (non garanti).
         $returnedData = $transaction->data
             ?? ($transaction['data'] ?? null)
             ?? ($transaction->requestData['data'] ?? null)
@@ -215,8 +179,6 @@ class SubscriptionController extends Controller
                 return response()->json(['message' => 'Cette transaction ne correspond pas a votre demande de paiement.'], 422);
             }
         } else {
-            // L'API ne renvoie pas ce champ dans cette version/config : on le note
-            // pour audit, sans bloquer (on reste protege par l'intention + l'idempotence).
             Log::info('Kkiapay confirm : champ data absent de la reponse verifyTransaction, corroboration non disponible pour cette transaction.', [
                 'transaction_id' => $validated['transaction_id'],
             ]);
@@ -236,8 +198,6 @@ class SubscriptionController extends Controller
             return response()->json(['message' => 'Le montant de la transaction ne correspond pas au prix de l\'abonnement.'], 422);
         }
 
-        // Periode : prolonge a partir de la fin d'abonnement actuelle si encore active,
-        // sinon a partir d'aujourd'hui.
         $periodStart = ($shop->subscription_end && $shop->subscription_end->isFuture())
             ? $shop->subscription_end->copy()
             : now();
@@ -273,12 +233,6 @@ class SubscriptionController extends Controller
         ]);
     }
 
-    /**
-     * Webhook Kkiapay — a titre de journalisation/reconciliation UNIQUEMENT.
-     * N'active PAS automatiquement un abonnement : le flux autoritatif est /confirm,
-     * appele par le client authentifie apres succes du widget, avec verification
-     * de l'intention de paiement liee a la boutique.
-     */
     #[OA\Post(
         path: '/webhooks/kkiapay',
         summary: 'Webhook Kkiapay (journalisation, pas d\'activation automatique)',
@@ -306,9 +260,28 @@ class SubscriptionController extends Controller
                 Log::warning('Kkiapay : paiement reussi jamais confirme cote client - verification manuelle requise.', [
                     'transaction_id' => $transactionId,
                 ]);
-                // Volontairement pas d'auto-activation ici : voir docblock ci-dessus.
-                // Le Super Admin peut retrouver cette transaction via les logs et
-                // activer manuellement via /admin/shops/{id}/activate si necessaire.
+
+                $returnedData = $request->input('data') ?? $request->input('requestData.data');
+
+                if ($returnedData) {
+                    $intent = KkiapayPaymentIntent::where('reference', $returnedData)->first();
+                    if ($intent) {
+                        Alert::firstOrCreate(
+                            [
+                                'shop_id'         => $intent->shop_id,
+                                'product_unit_id' => null,
+                                'type'            => 'payment_unconfirmed',
+                            ],
+                            [
+                                'triggered_at' => now(),
+                                'meta' => [
+                                    'transaction_id' => $transactionId,
+                                    'message'        => "Un paiement a ete recu mais n'a pas pu etre confirme automatiquement. Contactez le support si votre abonnement n'est pas active sous peu.",
+                                ],
+                            ]
+                        );
+                    }
+                }
             }
         }
 
