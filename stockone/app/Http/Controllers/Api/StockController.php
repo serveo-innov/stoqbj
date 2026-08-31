@@ -49,6 +49,7 @@ class StockController extends Controller
             'unit_cost'       => ['nullable', 'numeric', 'min:0'],
             'reference'       => ['nullable', 'string', 'max:100'],
             'reason'          => ['nullable', 'string'],
+            'moved_at'        => ['nullable', 'date', 'before_or_equal:today'],
         ]);
 
         $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
@@ -88,7 +89,7 @@ class StockController extends Controller
                 'unit_cost'       => $validated['unit_cost'] ?? null,
                 'reference'       => $validated['reference'] ?? null,
                 'reason'          => $validated['reason'] ?? 'Reapprovisionnement',
-                'moved_at'        => now(),
+                'moved_at'        => $validated['moved_at'] ?? now(),
             ]);
 
             DB::commit();
