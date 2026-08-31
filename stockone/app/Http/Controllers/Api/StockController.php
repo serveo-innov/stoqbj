@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProductUnit;
+use App\Models\PriceHistory;
 use App\Models\StockMovement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,6 +58,24 @@ class StockController extends Controller
         try {
             $result = $unit->applyStockDelta($validated['quantity'], allowNegative: true);
 
+            if (isset($validated['unit_cost']) && (float) $validated['unit_cost'] !== (float) $unit->cost_price) {
+                PriceHistory::create([
+                    'product_unit_id'     => $unit->id,
+                    'changed_by'          => $request->user()->id,
+                    'old_price_wholesale' => $unit->price_wholesale,
+                    'old_price_detail'    => $unit->price_detail,
+                    'new_price_wholesale' => $unit->price_wholesale,
+                    'new_price_detail'    => $unit->price_detail,
+                    'old_price_extra'     => $unit->price_extra,
+                    'new_price_extra'     => $unit->price_extra,
+                    'old_cost_price'      => $unit->cost_price,
+                    'new_cost_price'      => $validated['unit_cost'],
+                    'reason'              => 'correction',
+                    'notes'               => 'Mise a jour automatique du prix achat suite a une entree de stock.',
+                ]);
+                $unit->update(['cost_price' => $validated['unit_cost']]);
+            }
+
             StockMovement::create([
                 'shop_id'         => $shopId,
                 'product_unit_id' => $unit->id,
@@ -74,9 +93,12 @@ class StockController extends Controller
 
             DB::commit();
             return response()->json([
-                'message'      => "Stock mis a jour : {$result['unit_before']} => {$result['unit_after']}",
+                'message'      => "{$validated['quantity']} {$unit->label}(s) ajoute(s) — stock unite de base : {$result['base_before']} -> {$result['base_after']}",
                 'stock_before' => $result['unit_before'],
                 'stock_after'  => $result['unit_after'],
+                'base_before'  => $result['base_before'],
+                'base_after'   => $result['base_after'],
+                'unit_label'   => $unit->label,
                 'unit'         => $unit->fresh(),
             ]);
 
@@ -143,6 +165,12 @@ class StockController extends Controller
                 'message'      => "Ajustement effectue : {$result['unit_before']} => {$result['unit_after']}",
                 'stock_before' => $result['unit_before'],
                 'stock_after'  => $result['unit_after'],
+                'base_before'  => $result['base_before'],
+                'base_after'   => $result['base_after'],
+                'unit_label'   => $unit->label,
+                'base_before'  => $result['base_before'],
+                'base_after'   => $result['base_after'],
+                'unit_label'   => $unit->label,
                 'unit'         => $unit->fresh(),
             ]);
 
@@ -198,17 +226,24 @@ class StockController extends Controller
         $shopId = $request->user()->shop_id;
 
         $units = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId)->where('is_active', true))
-            ->with('product.category')
+            ->with('product.category', 'product.units')
             ->get()
             ->filter(fn($unit) => $unit->stock_qty <= $unit->stock_alert_threshold)
             ->map(fn($unit) => [
                 'product_unit_id'       => $unit->id,
                 'product_name'          => $unit->product->name,
                 'unit_label'            => $unit->label,
+                'level'                 => $unit->level,
+                'qty_in_parent'         => $unit->qty_in_parent,
                 'category'              => $unit->product->category?->name,
                 'stock_qty'             => $unit->stock_qty,
                 'stock_alert_threshold' => $unit->stock_alert_threshold,
                 'status'                => $unit->isOutOfStock() ? 'out_of_stock' : 'low_stock',
+                'sibling_units'         => $unit->product->units->map(fn($sib) => [
+                    'level'         => $sib->level,
+                    'label'         => $sib->label,
+                    'qty_in_parent' => $sib->qty_in_parent,
+                ])->values(),
             ])
             ->values();
 

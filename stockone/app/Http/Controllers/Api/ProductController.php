@@ -32,7 +32,14 @@ class ProductController extends Controller
     {
         $shopId = $this->requireShopId($request);
 
-        $query = Product::forShop($shopId)->with(['category', 'units'])->active();
+        $query = Product::forShop($shopId)->with(['category', 'units']);
+
+        $status = $request->get('status', 'active');
+        if ($status === 'active') {
+            $query->active();
+        } elseif ($status === 'inactive') {
+            $query->where('is_active', false);
+        }
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -113,6 +120,7 @@ class ProductController extends Controller
             'units.*.label'                 => ['required', 'string', 'max:100'],
             'units.*.qty_in_parent'         => ['required', 'integer', 'min:1'],
             'units.*.price_wholesale'       => ['required', 'numeric', 'min:0'],
+            'units.*.price_detail'          => ['required', 'numeric', 'min:0'],
             'units.*.price_extra'           => ['required', 'numeric', 'min:0'],
             'units.*.cost_price'            => ['required', 'numeric', 'min:0'],
             'units.*.stock_qty'             => ['sometimes', 'integer', 'min:0'],
@@ -154,6 +162,7 @@ class ProductController extends Controller
                     'label'                 => $unitData['label'],
                     'qty_in_parent'         => $unitData['qty_in_parent'],
                     'price_wholesale'       => $unitData['price_wholesale'],
+                    'price_detail'          => $unitData['price_detail'],
                     'price_extra'           => $unitData['price_extra'],
                     'cost_price'            => $unitData['cost_price'],
                     'stock_qty'             => $initialStock,
@@ -230,6 +239,19 @@ class ProductController extends Controller
         return response()->json(['message' => 'Produit archive.']);
     }
 
+    public function forceDestroy(Request $request, int $id): JsonResponse
+    {
+        $product = Product::forShop($this->requireShopId($request))->withTrashed()->findOrFail($id);
+        try {
+            $product->forceDelete();
+        } catch (\Illuminate\Database\QueryException $e) {
+            return response()->json([
+                'message' => 'Ce produit a un historique de ventes ou de mouvements de stock : il ne peut pas etre supprime definitivement. Vous pouvez seulement l\'archiver.',
+            ], 409);
+        }
+        return response()->json(['message' => 'Produit supprime definitivement.']);
+    }
+
     #[OA\Put(
         path: '/products/{id}/units/{unitId}/price',
         summary: 'Modifier les prix d\'une unite',
@@ -259,6 +281,7 @@ class ProductController extends Controller
 
         $validated = $request->validate([
             'price_wholesale' => ['sometimes', 'numeric', 'min:0'],
+            'price_detail'    => ['sometimes', 'numeric', 'min:0'],
             'price_extra'     => ['sometimes', 'numeric', 'min:0'],
             'cost_price'      => ['sometimes', 'numeric', 'min:0'],
             'reason'          => ['sometimes', 'in:manual,promotion,correction'],
@@ -269,7 +292,9 @@ class ProductController extends Controller
             'product_unit_id'     => $unit->id,
             'changed_by'          => $request->user()->id,
             'old_price_wholesale' => $unit->price_wholesale,
+            'old_price_detail'    => $unit->price_detail,
             'new_price_wholesale' => $validated['price_wholesale'] ?? $unit->price_wholesale,
+            'new_price_detail'    => $validated['price_detail'] ?? $unit->price_detail,
             'old_price_extra'     => $unit->price_extra,
             'new_price_extra'     => $validated['price_extra'] ?? $unit->price_extra,
             'old_cost_price'      => $unit->cost_price,
@@ -280,6 +305,7 @@ class ProductController extends Controller
 
         $unit->update([
             'price_wholesale' => $validated['price_wholesale'] ?? $unit->price_wholesale,
+            'price_detail'    => $validated['price_detail'] ?? $unit->price_detail,
             'price_extra'     => $validated['price_extra'] ?? $unit->price_extra,
             'cost_price'      => $validated['cost_price'] ?? $unit->cost_price,
         ]);
@@ -311,6 +337,7 @@ class ProductController extends Controller
             'label'                 => ['required', 'string', 'max:100'],
             'qty_in_parent'         => ['required', 'integer', 'min:1'],
             'price_wholesale'       => ['required', 'numeric', 'min:0'],
+            'price_detail'          => ['required', 'numeric', 'min:0'],
             'price_extra'           => ['required', 'numeric', 'min:0'],
             'cost_price'            => ['required', 'numeric', 'min:0'],
             'stock_alert_threshold' => ['sometimes', 'integer', 'min:0'],
@@ -334,6 +361,7 @@ class ProductController extends Controller
             'label'                 => $validated['label'],
             'qty_in_parent'         => $validated['qty_in_parent'],
             'price_wholesale'       => $validated['price_wholesale'],
+            'price_detail'          => $validated['price_detail'],
             'price_extra'           => $validated['price_extra'],
             'cost_price'            => $validated['cost_price'],
             'stock_qty'             => 0,

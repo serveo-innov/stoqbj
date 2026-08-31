@@ -13,6 +13,7 @@ class ProductUnit extends Model
         'label',
         'qty_in_parent',
         'price_wholesale',
+        'price_detail',
         'price_extra',
         'cost_price',
         'is_divisible',
@@ -21,12 +22,19 @@ class ProductUnit extends Model
         'stock_alert_threshold',
         'last_sold_at',
     ];
+
+    protected $appends = [
+        'margin_wholesale_percent',
+        'margin_detail_percent',
+        'margin_extra_percent',
+    ];
     protected function casts(): array
     {
         return [
             'is_divisible'          => 'boolean',
             'is_sellable'           => 'boolean',
             'price_wholesale'       => 'decimal:2',
+            'price_detail'          => 'decimal:2',
             'price_extra'           => 'decimal:2',
             'cost_price'            => 'decimal:2',
             'last_sold_at'          => 'datetime',
@@ -159,10 +167,20 @@ class ProductUnit extends Model
     {
         return $this->stock_qty <= ($this->stock_alert_threshold / 2);
     }
-    public function getMarginPercentAttribute(): float
+    public function getMarginWholesalePercentAttribute(): float
     {
         if ($this->cost_price <= 0) return 0;
         return round((($this->price_wholesale - $this->cost_price) / $this->cost_price) * 100, 2);
+    }
+    public function getMarginDetailPercentAttribute(): float
+    {
+        if ($this->cost_price <= 0) return 0;
+        return round((($this->price_detail - $this->cost_price) / $this->cost_price) * 100, 2);
+    }
+    public function getMarginExtraPercentAttribute(): float
+    {
+        if ($this->cost_price <= 0) return 0;
+        return round((($this->price_extra - $this->cost_price) / $this->cost_price) * 100, 2);
     }
     public function getDormantDaysAttribute(): int
     {
