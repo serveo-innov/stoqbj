@@ -41,7 +41,9 @@ const StockEntry: React.FC = () => {
     unit_cost: '',
     reference: '',
     reason: 'Réapprovisionnement',
+    moved_at: '',
   });
+  const [showDateField, setShowDateField] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -94,12 +96,14 @@ const StockEntry: React.FC = () => {
       if (form.supplier_id) payload.supplier_id = Number(form.supplier_id);
       if (form.unit_cost)   payload.unit_cost   = Number(form.unit_cost);
       if (form.reference)   payload.reference   = form.reference;
+      if (form.moved_at)    payload.moved_at    = form.moved_at;
 
       const res = await api.post<any>('/stock/entry', payload);
       setSuccess(res.message || `Stock mis a jour : ${res.stock_before} -> ${res.stock_after} unites`);
       setJustUpdatedId(Number(form.product_unit_id));
       setTimeout(() => setJustUpdatedId(null), 4000);
-      setForm(f => ({ ...f, quantity:'', supplier_id:'', unit_cost:'', reference:'', reason:'Réapprovisionnement' }));
+      setForm(f => ({ ...f, quantity:'', supplier_id:'', unit_cost:'', reference:'', reason:'Réapprovisionnement', moved_at:'' }));
+      setShowDateField(false);
       loadData();
       setTimeout(() => setSuccess(null), 4000);
     } catch (e: any) { setError(e.message); }
@@ -236,6 +240,22 @@ const StockEntry: React.FC = () => {
                         value={form.reference} onChange={e => setForm(f=>({...f,reference:e.target.value}))}
                         style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                     </div>
+                  </div>
+
+                  <div className="mb-3">
+                    {!showDateField ? (
+                      <button type="button" className="btn btn-link btn-sm p-0" style={{color:'#F97316',textDecoration:'underline'}}
+                        onClick={() => setShowDateField(true)}>
+                        <i className="ti ti-calendar me-1"/>Cette entree date d'un autre jour
+                      </button>
+                    ) : (
+                      <>
+                        <label className="form-label fs-13 fw-600">Date de l'entree</label>
+                        <input type="date" className="form-control" max={new Date().toISOString().slice(0,10)}
+                          value={form.moved_at} onChange={e => setForm(f=>({...f,moved_at:e.target.value}))}
+                          style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                      </>
+                    )}
                   </div>
 
                   <div className="mb-4">
