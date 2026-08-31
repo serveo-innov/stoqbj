@@ -274,8 +274,10 @@ const StockEntry: React.FC = () => {
                       <option>Réapprovisionnement</option>
                       <option>Livraison fournisseur</option>
                       <option>Retour client</option>
-                      <option>Correction inventaire</option>
                     </select>
+                    <div className="fs-12 text-muted mt-1">
+                      <i className="ti ti-info-circle me-1"/>Pour un comptage physique avec ecarts, utilisez la page Inventaire.
+                    </div>
                   </div>
 
                   <button type="submit" className="btn w-100" disabled={saving}
