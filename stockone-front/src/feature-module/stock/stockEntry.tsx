@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../core/services/apiService';
+import { decomposeStock } from '../../core/utils/stockDecompose';
+import type { DecomposableUnit } from '../../core/utils/stockDecompose';
 
 interface ProductUnit {
   id: number;
   level: number;
   label: string;
+  qty_in_parent: number;
   stock_qty: number;
   price_wholesale: string;
   product: { name: string; reference: string | null; };
+  siblingUnits: DecomposableUnit[];
 }
 
 interface Supplier {
@@ -51,7 +55,7 @@ const StockEntry: React.FC = () => {
       const allUnits: ProductUnit[] = [];
       prodRes.data.forEach((p: any) => {
         p.units.forEach((u: any) => {
-          allUnits.push({ ...u, product: { name: p.name, reference: p.reference } });
+          allUnits.push({ ...u, product: { name: p.name, reference: p.reference }, siblingUnits: p.units });
         });
       });
       setUnits(allUnits);
@@ -92,7 +96,7 @@ const StockEntry: React.FC = () => {
       if (form.reference)   payload.reference   = form.reference;
 
       const res = await api.post<any>('/stock/entry', payload);
-      setSuccess(`Stock mis a jour : ${res.stock_before} -> ${res.stock_after} unites`);
+      setSuccess(res.message || `Stock mis a jour : ${res.stock_before} -> ${res.stock_after} unites`);
       setJustUpdatedId(Number(form.product_unit_id));
       setTimeout(() => setJustUpdatedId(null), 4000);
       setForm(f => ({ ...f, quantity:'', supplier_id:'', unit_cost:'', reference:'', reason:'Réapprovisionnement' }));
@@ -206,16 +210,18 @@ const StockEntry: React.FC = () => {
                       required style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
 
-                  <div className="mb-3">
-                    <label className="form-label fs-13 fw-600">Fournisseur</label>
-                    <select className="form-select"
-                      value={form.supplier_id}
-                      onChange={e => setForm(f=>({...f,supplier_id:e.target.value}))}
-                      style={{borderColor:'#e5e7eb',borderRadius:8}}>
-                      <option value="">Sans fournisseur</option>
-                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
+                  {form.reason === 'Livraison fournisseur' && (
+                    <div className="mb-3">
+                      <label className="form-label fs-13 fw-600">Fournisseur</label>
+                      <select className="form-select"
+                        value={form.supplier_id}
+                        onChange={e => setForm(f=>({...f,supplier_id:e.target.value}))}
+                        style={{borderColor:'#e5e7eb',borderRadius:8}}>
+                        <option value="">Sans fournisseur</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="row g-2 mb-3">
                     <div className="col-6">
@@ -236,7 +242,11 @@ const StockEntry: React.FC = () => {
                     <label className="form-label fs-13 fw-600">Motif</label>
                     <select className="form-select"
                       value={form.reason}
-                      onChange={e => setForm(f=>({...f,reason:e.target.value}))}
+                      onChange={e => setForm(f=>({
+                        ...f,
+                        reason: e.target.value,
+                        supplier_id: e.target.value === 'Livraison fournisseur' ? f.supplier_id : '',
+                      }))}
                       style={{borderColor:'#e5e7eb',borderRadius:8}}>
                       <option>Réapprovisionnement</option>
                       <option>Livraison fournisseur</option>
@@ -298,6 +308,9 @@ const StockEntry: React.FC = () => {
                           <td className="align-middle fs-13">{u.label}</td>
                           <td className="align-middle text-center">
                             <span className="fw-700 fs-14" style={{color}}>{u.stock_qty}</span>
+                            {u.level === 1 && u.siblingUnits.length > 1 && (
+                              <div className="fs-11 text-muted">{decomposeStock(u.stock_qty, u.siblingUnits)}</div>
+                            )}
                           </td>
                           <td className="align-middle">
                             <span className="badge" style={{background:bg,color,border:`1px solid ${color}30`,fontSize:11}}>
