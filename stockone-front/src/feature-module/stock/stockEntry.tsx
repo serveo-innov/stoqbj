@@ -228,13 +228,15 @@ const StockEntry: React.FC = () => {
                   )}
 
                   <div className="row g-2 mb-3">
-                    <div className="col-6">
-                      <label className="form-label fs-13 fw-600">Prix unitaire (FCFA)</label>
-                      <input type="number" className="form-control" min="0" placeholder="0"
-                        value={form.unit_cost} onChange={e => setForm(f=>({...f,unit_cost:e.target.value}))}
-                        style={{borderColor:'#e5e7eb',borderRadius:8}}/>
-                    </div>
-                    <div className="col-6">
+                    {form.reason !== 'Retour client' && (
+                      <div className="col-6">
+                        <label className="form-label fs-13 fw-600">Prix unitaire (FCFA)</label>
+                        <input type="number" className="form-control" min="0" placeholder="0"
+                          value={form.unit_cost} onChange={e => setForm(f=>({...f,unit_cost:e.target.value}))}
+                          style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                      </div>
+                    )}
+                    <div className={form.reason !== 'Retour client' ? 'col-6' : 'col-12'}>
                       <label className="form-label fs-13 fw-600">Ref. bon livraison</label>
                       <input type="text" className="form-control" placeholder="BL-2026-001"
                         value={form.reference} onChange={e => setForm(f=>({...f,reference:e.target.value}))}
@@ -266,6 +268,7 @@ const StockEntry: React.FC = () => {
                         ...f,
                         reason: e.target.value,
                         supplier_id: e.target.value === 'Livraison fournisseur' ? f.supplier_id : '',
+                        unit_cost: e.target.value === 'Retour client' ? '' : f.unit_cost,
                       }))}
                       style={{borderColor:'#e5e7eb',borderRadius:8}}>
                       <option>Réapprovisionnement</option>
