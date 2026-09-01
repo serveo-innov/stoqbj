@@ -37,6 +37,21 @@ interface AdjustmentResult {
 
 const todayStr = () => new Date().toLocaleDateString('fr-FR');
 
+const downloadCsv = (filename: string, headers: string[], rows: (string | number)[][]) => {
+  const esc = (v: string | number) => '"' + String(v).replace(/"/g, '""') + '"';
+  const lines = [headers.map(esc).join(';')].concat(rows.map(r => r.map(esc).join(';')));
+  const csv = '\uFEFF' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 const Inventory: React.FC = () => {
   const [products,   setProducts]   = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -164,6 +179,17 @@ const Inventory: React.FC = () => {
             <div className="fs-11 text-muted">Écarts</div>
             <div className="fw-700 fs-14" style={{color: nbDiscrepancies > 0 ? '#dc2626' : '#16a34a'}}>{nbDiscrepancies}</div>
           </div>
+          <button className="btn d-flex align-items-center gap-2"
+            style={{background:'#f3f4f6',border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600}}
+            onClick={() => downloadCsv(
+              'Feuille_comptage_' + todayStr().replace(/\//g,'-') + '.csv',
+              ['Produit', 'Unite', 'Stock theorique', 'Stock compte', 'Ecart'],
+              rows.map(function(r) {
+                return [r.product_name, r.unit_label, r.theoretical, r.counted || '', r.counted !== '' ? Number(r.counted) - r.theoretical : ''];
+              })
+            )}>
+            <i className="ti ti-download fs-16"/>Exporter (CSV)
+          </button>
           <button className="btn d-flex align-items-center gap-2" disabled={submitting} onClick={handleSubmitClick}
             style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600}}>
             {submitting ? <span className="spinner-border spinner-border-sm"/> : <><i className="ti ti-check fs-16"/>Valider l'inventaire</>}
@@ -213,10 +239,22 @@ const Inventory: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            <button className="btn btn-sm mt-3" onClick={() => setResults(null)}
-              style={{background:'#f3f4f6',border:'none',borderRadius:8}}>
-              Fermer
-            </button>
+            <div className="d-flex gap-2 mt-3">
+              <button className="btn btn-sm" onClick={() => downloadCsv(
+                'Resultat_inventaire_' + todayStr().replace(/\//g,'-') + '.csv',
+                ['Produit', 'Unite', 'Ecart applique', 'Statut'],
+                results!.map(function(r) {
+                  return [r.product_name, r.unit_label, r.delta, r.status === 'success' ? 'Applique' : 'Echec: ' + (r.message || '')];
+                })
+              )}
+                style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8}}>
+                <i className="ti ti-download me-1"/>Exporter (CSV)
+              </button>
+              <button className="btn btn-sm" onClick={() => setResults(null)}
+                style={{background:'#f3f4f6',border:'none',borderRadius:8}}>
+                Fermer
+              </button>
+            </div>
           </div>
         </div>
       )}
