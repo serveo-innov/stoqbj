@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ProductUnit;
 use App\Models\PriceHistory;
 use App\Models\StockMovement;
+use App\Services\StockAdjustmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,7 @@ class StockController extends Controller
                     new OA\Property(property: 'unit_cost',       type: 'number',  example: 10000),
                     new OA\Property(property: 'reference',       type: 'string',  example: 'BON-2025-001'),
                     new OA\Property(property: 'reason',          type: 'string',  example: 'Livraison fournisseur'),
+                    new OA\Property(property: 'moved_at',        type: 'string',  format: 'date', example: '2026-08-30'),
                 ]
             )
         ),
@@ -131,7 +133,7 @@ class StockController extends Controller
             new OA\Response(response: 422, description: 'Stock insuffisant'),
         ]
     )]
-    public function adjustment(Request $request): JsonResponse
+    public function adjustment(Request $request, StockAdjustmentService $service): JsonResponse
     {
         $shopId = $request->user()->shop_id;
 
@@ -142,47 +144,30 @@ class StockController extends Controller
             'reason'          => ['required', 'string', 'max:255'],
         ]);
 
-        $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
-            ->findOrFail($validated['product_unit_id']);
-
-        DB::beginTransaction();
         try {
-            $result = $unit->applyStockDelta($validated['quantity'], allowNegative: false);
+            $result = $service->apply(
+                shopId: $shopId,
+                productUnitId: $validated['product_unit_id'],
+                quantity: $validated['quantity'],
+                type: $validated['type'],
+                reason: $validated['reason'],
+                userId: $request->user()->id,
+            );
 
-            StockMovement::create([
-                'shop_id'         => $shopId,
-                'product_unit_id' => $unit->id,
-                'user_id'         => $request->user()->id,
-                'type'            => $validated['type'],
-                'quantity'        => $validated['quantity'],
-                'stock_before'    => $result['unit_before'],
-                'stock_after'     => $result['unit_after'],
-                'reason'          => $validated['reason'],
-                'moved_at'        => now(),
-            ]);
-
-            DB::commit();
             return response()->json([
                 'message'      => "Ajustement effectue : {$result['unit_before']} => {$result['unit_after']}",
                 'stock_before' => $result['unit_before'],
                 'stock_after'  => $result['unit_after'],
                 'base_before'  => $result['base_before'],
                 'base_after'   => $result['base_after'],
-                'unit_label'   => $unit->label,
-                'base_before'  => $result['base_before'],
-                'base_after'   => $result['base_after'],
-                'unit_label'   => $unit->label,
-                'unit'         => $unit->fresh(),
+                'unit_label'   => $result['unit']->label,
+                'unit'         => $result['unit'],
             ]);
 
         } catch (\RuntimeException $e) {
-            DB::rollBack();
             return response()->json([
                 'message' => "Stock insuffisant pour cet ajustement.",
             ], 422);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            throw $e;
         }
     }
 
