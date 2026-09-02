@@ -32,7 +32,7 @@ interface AdjustmentResult {
   product_name: string;
   unit_label: string;
   delta: number;
-  status: 'success' | 'error';
+  status: 'match' | 'success' | 'error';
   message?: string;
 }
 
@@ -104,8 +104,11 @@ const Inventory: React.FC = () => {
     finally { setLoading(false); }
   };
 
+  // Autorise uniquement des chiffres : bloque le signe negatif et toute
+  // autre saisie non numerique directement a la frappe ou au collage.
   const updateCounted = (unitId: number, value: string) => {
-    setRows(prev => prev.map(r => r.product_unit_id === unitId ? { ...r, counted: value } : r));
+    const cleaned = value.replace(/[^0-9]/g, '');
+    setRows(prev => prev.map(r => r.product_unit_id === unitId ? { ...r, counted: cleaned } : r));
   };
 
   const filteredRows = rows.filter(r => {
@@ -122,12 +125,16 @@ const Inventory: React.FC = () => {
     return true;
   });
 
-  const rowsToSubmit = rows.filter(r => r.counted !== '' && Number(r.counted) !== r.theoretical);
-  const nbCounted = rows.filter(r => r.counted !== '').length;
-  const nbDiscrepancies = rowsToSubmit.length;
+  // Tous les produits reellement comptes (compte renseigne), pas seulement
+  // ceux avec un ecart -- pour que le rapport prouve l'exhaustivite du
+  // comptage, pas seulement les corrections.
+  const countedRows = rows.filter(r => r.counted !== '');
+  const rowsWithGap = countedRows.filter(r => Number(r.counted) !== r.theoretical);
+  const nbCounted = countedRows.length;
+  const nbDiscrepancies = rowsWithGap.length;
 
   const handleSubmitClick = () => {
-    if (rowsToSubmit.length === 0) { setError('Aucun écart à corriger — rien à soumettre.'); return; }
+    if (countedRows.length === 0) { setError('Aucun produit compté — rien à soumettre.'); return; }
     setShowConfirm(true);
   };
 
@@ -138,7 +145,7 @@ const Inventory: React.FC = () => {
     try {
       const res = await api.post<{ inventory_id: number; results: AdjustmentResult[] }>('/inventory', {
         notes: `Inventaire physique du ${todayStr()}`,
-        items: rowsToSubmit.map(r => ({
+        items: countedRows.map(r => ({
           product_unit_id: r.product_unit_id,
           theoretical_qty: r.theoretical,
           physical_qty: Number(r.counted),
@@ -248,14 +255,14 @@ const Inventory: React.FC = () => {
           <div className="card-body">
             <h6 className="fw-700 mb-3 d-flex align-items-center gap-2">
               <i className="ti ti-clipboard-check" style={{color:'#F97316'}}/>
-              Résultat de l'inventaire ({results.filter(r=>r.status==='success').length}/{results.length} ajustements appliqués)
+              Résultat de l'inventaire ({results.length} produits vérifiés, {results.filter(r=>r.status!=='match').length} écarts traités)
             </h6>
             <div className="table-responsive">
               <table className="table table-sm mb-0">
                 <thead style={{background:'#f8f9fa'}}>
                   <tr>
                     <th className="fs-11 fw-600 border-0">Produit</th>
-                    <th className="fs-11 fw-600 border-0 text-center">Écart appliqué</th>
+                    <th className="fs-11 fw-600 border-0 text-center">Écart</th>
                     <th className="fs-11 fw-600 border-0">Statut</th>
                   </tr>
                 </thead>
@@ -263,9 +270,11 @@ const Inventory: React.FC = () => {
                   {results.map((r, idx) => (
                     <tr key={idx}>
                       <td className="fs-13">{r.product_name} — {r.unit_label}</td>
-                      <td className="text-center fw-600 fs-13" style={{color: r.delta > 0 ? '#16a34a' : '#dc2626'}}>{fmt(r.delta)}</td>
+                      <td className="text-center fw-600 fs-13" style={{color: r.delta > 0 ? '#16a34a' : r.delta < 0 ? '#dc2626' : '#888'}}>{fmt(r.delta)}</td>
                       <td>
-                        {r.status === 'success' ? (
+                        {r.status === 'match' ? (
+                          <span className="badge" style={{background:'#f3f4f6',color:'#6b7280',fontSize:11}}>Conforme</span>
+                        ) : r.status === 'success' ? (
                           <span className="badge" style={{background:'#f0fdf4',color:'#16a34a',fontSize:11}}>Appliqué</span>
                         ) : (
                           <span className="badge" style={{background:'#fef2f2',color:'#dc2626',fontSize:11}} title={r.message}>Échec</span>
@@ -283,9 +292,10 @@ const Inventory: React.FC = () => {
               </button>
               <button className="btn btn-sm" onClick={() => downloadCsv(
                 'Resultat_inventaire_' + todayStr().replace(/\//g,'-') + '.csv',
-                ['Produit', 'Unite', 'Ecart applique', 'Statut'],
+                ['Produit', 'Unite', 'Ecart', 'Statut'],
                 results.map(function(r) {
-                  return [r.product_name, r.unit_label, r.delta, r.status === 'success' ? 'Applique' : 'Echec: ' + (r.message || '')];
+                  const label = r.status === 'match' ? 'Conforme' : r.status === 'success' ? 'Applique' : 'Echec: ' + (r.message || '');
+                  return [r.product_name, r.unit_label, r.delta, label];
                 })
               )}
                 style={{background:'#f3f4f6',border:'none',borderRadius:8}}>
@@ -358,9 +368,10 @@ const Inventory: React.FC = () => {
                         <td className="align-middle fs-13">{row.unit_label}</td>
                         <td className="align-middle text-center fs-13 text-muted">{row.theoretical}</td>
                         <td className="align-middle text-center">
-                          <input type="number" min={0}
+                          <input type="number" min={0} step={1} inputMode="numeric" pattern="[0-9]*"
                             placeholder="—"
                             value={row.counted}
+                            onKeyDown={e => { if (e.key === '-' || e.key === '+' || e.key === 'e') e.preventDefault(); }}
                             onChange={e => updateCounted(row.product_unit_id, e.target.value)}
                             style={{
                               width: 80, textAlign:'center', padding:'4px 6px',
@@ -398,8 +409,9 @@ const Inventory: React.FC = () => {
               </div>
               <div className="modal-body">
                 <p className="fs-14">
-                  Vous vous apprêtez à appliquer <strong>{nbDiscrepancies} ajustement{nbDiscrepancies > 1 ? 's' : ''}</strong> de stock
-                  basés sur votre comptage physique. Cette action est irréversible (mais chaque ajustement reste tracé dans l'historique des mouvements, et un rapport PDF officiel sera généré).
+                  Vous vous apprêtez à enregistrer <strong>{nbCounted} produit{nbCounted > 1 ? 's' : ''} vérifié{nbCounted > 1 ? 's' : ''}</strong>,
+                  dont <strong>{nbDiscrepancies} ajustement{nbDiscrepancies > 1 ? 's' : ''}</strong> de stock. Cette action est irréversible
+                  (mais chaque ajustement reste tracé dans l'historique des mouvements, et un rapport PDF officiel complet sera généré).
                 </p>
               </div>
               <div className="modal-footer" style={{borderTop:'1px solid #e5e7eb'}}>
