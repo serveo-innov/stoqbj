@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CreditController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReportController;
@@ -109,6 +110,9 @@ Route::prefix('v1')->group(function () {
             Route::put('products/{id}/units/{unitId}', [ProductController::class, 'updateUnit']);
             Route::delete('products/{id}/units/{unitId}', [ProductController::class, 'deleteUnit']);
             Route::post('stock/adjustment',  [StockController::class, 'adjustment']);
+            Route::post('inventory',           [InventoryController::class, 'store']);
+            Route::get('inventory/history',    [InventoryController::class, 'history']);
+            Route::get('inventory/{id}/pdf',   [InventoryController::class, 'pdf']);
 
             Route::post('credits/{id}/doubtful', [CreditController::class, 'markDoubtful']);
             Route::post('credits/{id}/extend',   [CreditController::class, 'extend']);
