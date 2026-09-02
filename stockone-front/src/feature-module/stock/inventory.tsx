@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../core/services/apiService';
+import { API_BASE_URL } from '../../environment';
 
 interface ProductUnit {
   id: number;
@@ -37,6 +38,12 @@ interface AdjustmentResult {
 
 const todayStr = () => new Date().toLocaleDateString('fr-FR');
 
+const getToken = (): string | null => localStorage.getItem('stockone_token');
+const getShopId = (): number | null => {
+  const user = JSON.parse(localStorage.getItem('stockone_user') || 'null');
+  return user?.role === 'super_admin' ? null : user?.shop?.id ?? null;
+};
+
 const downloadCsv = (filename: string, headers: string[], rows: (string | number)[][]) => {
   const esc = (v: string | number) => '"' + String(v).replace(/"/g, '""') + '"';
   const lines = [headers.map(esc).join(';')].concat(rows.map(r => r.map(esc).join(';')));
@@ -65,6 +72,8 @@ const Inventory: React.FC = () => {
 
   const [submitting, setSubmitting] = useState(false);
   const [results,    setResults]    = useState<AdjustmentResult[] | null>(null);
+  const [inventoryId, setInventoryId] = useState<number | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -126,32 +135,60 @@ const Inventory: React.FC = () => {
     setSubmitting(true);
     setShowConfirm(false);
     setError(null);
-    const outcomes: AdjustmentResult[] = [];
-
-    for (const row of rowsToSubmit) {
-      const delta = Number(row.counted) - row.theoretical;
-      try {
-        await api.post('/stock/adjustment', {
-          product_unit_id: row.product_unit_id,
-          quantity: delta,
-          type: 'inventory',
-          reason: `Inventaire physique du ${todayStr()}`,
-        });
-        outcomes.push({
-          product_unit_id: row.product_unit_id, product_name: row.product_name,
-          unit_label: row.unit_label, delta, status: 'success',
-        });
-      } catch (e: any) {
-        outcomes.push({
-          product_unit_id: row.product_unit_id, product_name: row.product_name,
-          unit_label: row.unit_label, delta, status: 'error', message: e.message,
-        });
-      }
+    try {
+      const res = await api.post<{ inventory_id: number; results: AdjustmentResult[] }>('/inventory', {
+        notes: `Inventaire physique du ${todayStr()}`,
+        items: rowsToSubmit.map(r => ({
+          product_unit_id: r.product_unit_id,
+          theoretical_qty: r.theoretical,
+          physical_qty: Number(r.counted),
+        })),
+      });
+      setResults(res.results);
+      setInventoryId(res.inventory_id);
+      load(); // recharge les stocks théoriques à jour
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la validation de l'inventaire.");
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    setResults(outcomes);
-    setSubmitting(false);
-    load(); // recharge les stocks théoriques à jour
+  const handleDownloadPdf = async () => {
+    if (!inventoryId) return;
+    setDownloadingPdf(true);
+    setError(null);
+    try {
+      const url = new URL(`${API_BASE_URL}/inventory/${inventoryId}/pdf`);
+      const shopId = getShopId();
+      if (shopId) url.searchParams.set('shop_id', String(shopId));
+      const token = getToken();
+
+      const response = await fetch(url.toString(), {
+        headers: { 'Accept': 'application/pdf', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.message || `Erreur ${response.status}`);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition');
+      const match = disposition && disposition.match(/filename="?(.+)"?/);
+      const filename = match ? match[1].replace(/"/g, '') : `inventaire-${inventoryId}.pdf`;
+
+      const link = document.createElement('a');
+      const objectUrl = window.URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (e: any) {
+      setError(e.message || "Erreur lors du téléchargement du PDF.");
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -188,7 +225,7 @@ const Inventory: React.FC = () => {
                 return [r.product_name, r.unit_label, r.theoretical, r.counted || '', r.counted !== '' ? Number(r.counted) - r.theoretical : ''];
               })
             )}>
-            <i className="ti ti-download fs-16"/>Exporter (CSV)
+            <i className="ti ti-download fs-16"/>CSV
           </button>
           <button className="btn d-flex align-items-center gap-2" disabled={submitting} onClick={handleSubmitClick}
             style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600}}>
@@ -240,17 +277,21 @@ const Inventory: React.FC = () => {
               </table>
             </div>
             <div className="d-flex gap-2 mt-3">
+              <button className="btn btn-sm d-flex align-items-center gap-1" disabled={downloadingPdf} onClick={handleDownloadPdf}
+                style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,padding:'6px 14px',fontWeight:600}}>
+                {downloadingPdf ? <span className="spinner-border spinner-border-sm"/> : <><i className="ti ti-file-download"/>Rapport PDF</>}
+              </button>
               <button className="btn btn-sm" onClick={() => downloadCsv(
                 'Resultat_inventaire_' + todayStr().replace(/\//g,'-') + '.csv',
                 ['Produit', 'Unite', 'Ecart applique', 'Statut'],
-                results!.map(function(r) {
+                results.map(function(r) {
                   return [r.product_name, r.unit_label, r.delta, r.status === 'success' ? 'Applique' : 'Echec: ' + (r.message || '')];
                 })
               )}
-                style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8}}>
-                <i className="ti ti-download me-1"/>Exporter (CSV)
+                style={{background:'#f3f4f6',border:'none',borderRadius:8}}>
+                <i className="ti ti-download me-1"/>CSV
               </button>
-              <button className="btn btn-sm" onClick={() => setResults(null)}
+              <button className="btn btn-sm" onClick={() => { setResults(null); setInventoryId(null); }}
                 style={{background:'#f3f4f6',border:'none',borderRadius:8}}>
                 Fermer
               </button>
@@ -358,7 +399,7 @@ const Inventory: React.FC = () => {
               <div className="modal-body">
                 <p className="fs-14">
                   Vous vous apprêtez à appliquer <strong>{nbDiscrepancies} ajustement{nbDiscrepancies > 1 ? 's' : ''}</strong> de stock
-                  basés sur votre comptage physique. Cette action est irréversible (mais chaque ajustement reste tracé dans l'historique des mouvements).
+                  basés sur votre comptage physique. Cette action est irréversible (mais chaque ajustement reste tracé dans l'historique des mouvements, et un rapport PDF officiel sera généré).
                 </p>
               </div>
               <div className="modal-footer" style={{borderTop:'1px solid #e5e7eb'}}>
