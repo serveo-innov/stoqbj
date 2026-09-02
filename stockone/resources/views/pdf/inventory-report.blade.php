@@ -34,6 +34,7 @@
             margin-bottom: 12px; margin-top: 20px;
             border-left: 4px solid #F97316;
         }
+        h3.conforme { border-left-color: #16a34a; }
 
         table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
         th { background: #1a1a1a; color: #F97316; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
@@ -43,7 +44,6 @@
 
         .gap-positive { color: #16a34a; font-weight: bold; }
         .gap-negative { color: #dc2626; font-weight: bold; }
-        .gap-zero     { color: #888; }
 
         .confidential {
             background: #fff7ed; border: 1px solid #F97316;
@@ -88,25 +88,32 @@
     </div>
 </div>
 
-<div class="confidential">⚠️ Document confidentiel — Preuve de comptage physique, usage interne</div>
+<div class="confidential">⚠️ Document confidentiel — Preuve de comptage physique exhaustif, usage interne</div>
 
 @php
-    $totalItems  = $inventory->items->count();
-    $discrepancies = $inventory->items->where('gap', '!=', 0)->count();
+    $ecarts    = $inventory->items->where('gap', '!=', 0)->values();
+    $conformes = $inventory->items->where('gap', '=', 0)->values();
+    $totalItems = $inventory->items->count();
 @endphp
 
 <div class="kpi-grid">
     <div class="kpi-row">
         <div class="kpi-cell">
             <div class="kpi-box">
-                <div class="kpi-label">Produits comptes</div>
+                <div class="kpi-label">Produits verifies</div>
                 <div class="kpi-value">{{ $totalItems }}</div>
+            </div>
+        </div>
+        <div class="kpi-cell">
+            <div class="kpi-box" style="border-left-color:#16a34a;">
+                <div class="kpi-label" style="color:#16a34a;">Conformes</div>
+                <div class="kpi-value">{{ $conformes->count() }}</div>
             </div>
         </div>
         <div class="kpi-cell">
             <div class="kpi-box">
                 <div class="kpi-label">Ecarts constates</div>
-                <div class="kpi-value">{{ $discrepancies }}</div>
+                <div class="kpi-value">{{ $ecarts->count() }}</div>
             </div>
         </div>
         <div class="kpi-cell">
@@ -114,12 +121,6 @@
                 <div class="kpi-label">Valeur des ecarts</div>
                 <div class="kpi-value" style="font-size:14px;">{{ number_format($totalValueImpact, 0, ',', ' ') }}</div>
                 <div class="kpi-sub">FCFA</div>
-            </div>
-        </div>
-        <div class="kpi-cell">
-            <div class="kpi-box">
-                <div class="kpi-label">Statut</div>
-                <div class="kpi-value" style="font-size:14px;">Valide</div>
             </div>
         </div>
     </div>
@@ -130,7 +131,8 @@
 <p style="font-size:11px; margin-bottom:15px;">{{ $inventory->notes }}</p>
 @endif
 
-<h3>Detail du comptage</h3>
+@if($ecarts->count())
+<h3>Écarts constatés</h3>
 <table>
     <thead>
         <tr>
@@ -143,11 +145,11 @@
         </tr>
     </thead>
     <tbody>
-        @foreach($inventory->items as $item)
+        @foreach($ecarts as $item)
         @php
             $costPrice = (float) ($item->productUnit->cost_price ?? 0);
             $value = $item->gap * $costPrice;
-            $gapClass = $item->gap > 0 ? 'gap-positive' : ($item->gap < 0 ? 'gap-negative' : 'gap-zero');
+            $gapClass = $item->gap > 0 ? 'gap-positive' : 'gap-negative';
         @endphp
         <tr>
             <td>{{ $item->productUnit->product->name ?? '—' }}</td>
@@ -160,6 +162,29 @@
         @endforeach
     </tbody>
 </table>
+@endif
+
+@if($conformes->count())
+<h3 class="conforme">Produits conformes (comptage confirme, aucun ecart)</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Produit</th>
+            <th>Unite</th>
+            <th style="text-align:center;">Quantite verifiee</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($conformes as $item)
+        <tr>
+            <td>{{ $item->productUnit->product->name ?? '—' }}</td>
+            <td>{{ $item->productUnit->label ?? '—' }}</td>
+            <td style="text-align:center;">{{ $item->physical_qty }}</td>
+        </tr>
+        @endforeach
+    </tbody>
+</table>
+@endif
 
 <div class="signature-zone">
     <div class="sig-left">Signature du responsable comptage</div>

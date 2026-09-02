@@ -20,9 +20,11 @@ class InventoryController extends Controller
     use ResolvesShopId;
 
     /**
-     * Enregistrer une session d'inventaire : cree la session, chaque ligne
-     * comptee, et applique les ajustements de stock necessaires via le
-     * StockAdjustmentService (lien inventory_id conserve pour tracabilite).
+     * Enregistrer une session d'inventaire : cree la session, TOUTES les
+     * lignes comptees (conformes et ecarts), et applique les ajustements
+     * de stock uniquement pour les lignes ou un ecart reel existe. Un
+     * produit dont le compte physique correspond au theorique est quand
+     * meme enregistre, pour prouver qu'il a bien ete verifie.
      */
     #[OA\Post(
         path: '/inventory',
@@ -72,7 +74,7 @@ class InventoryController extends Controller
                 'product_name'    => $unit?->product?->name,
                 'unit_label'      => $unit?->label,
                 'delta'           => $gap,
-                'status'          => 'success',
+                'status'          => 'match', // conforme, aucun ajustement necessaire
             ];
 
             if ($gap !== 0) {
@@ -86,6 +88,7 @@ class InventoryController extends Controller
                         userId: $request->user()->id,
                         inventoryId: $inventory->id,
                     );
+                    $entry['status'] = 'success';
                 } catch (\RuntimeException $e) {
                     $entry['status']  = 'error';
                     $entry['message'] = 'Stock insuffisant pour cet ajustement.';
@@ -124,12 +127,12 @@ class InventoryController extends Controller
         $inventories->getCollection()->transform(function (Inventory $inv) {
             $discrepancies = $inv->items()->where('gap', '!=', 0)->count();
             return [
-                'id'               => $inv->id,
-                'created_at'       => $inv->created_at,
-                'created_by'       => trim(($inv->createdBy->firstname ?? '') . ' ' . ($inv->createdBy->name ?? '')),
-                'items_count'      => $inv->items_count,
-                'discrepancies'    => $discrepancies,
-                'notes'            => $inv->notes,
+                'id'            => $inv->id,
+                'created_at'    => $inv->created_at,
+                'created_by'    => trim(($inv->createdBy->firstname ?? '') . ' ' . ($inv->createdBy->name ?? '')),
+                'items_count'   => $inv->items_count,
+                'discrepancies' => $discrepancies,
+                'notes'         => $inv->notes,
             ];
         });
 
