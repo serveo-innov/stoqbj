@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../core/services/apiService';
 
 interface Movement {
@@ -28,6 +28,7 @@ const typeConfig: Record<string, { label: string; color: string; bg: string; ico
 };
 
 const StockMovements: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const preselectedInventoryId = searchParams.get('inventory_id');
 
@@ -78,6 +79,10 @@ const StockMovements: React.FC = () => {
       {preselectedInventoryId && (
         <div className="alert mb-3 d-flex align-items-center gap-2"
           style={{background:'#fff7ed',border:'1px solid #FED7AA',borderRadius:8,color:'#EA580C'}}>
+          <button className="btn btn-sm d-flex align-items-center gap-1" onClick={() => navigate(-1)}
+            style={{background:'#fff',border:'1px solid #FED7AA',borderRadius:6,padding:'4px 10px',fontSize:12,color:'#EA580C'}}>
+            <i className="ti ti-arrow-left"/>Retour
+          </button>
           <i className="ti ti-filter"/>
           Filtré sur la session d'inventaire #{preselectedInventoryId}
           <button className="btn btn-link btn-sm p-0 ms-auto" style={{color:'#F97316',textDecoration:'underline'}}
