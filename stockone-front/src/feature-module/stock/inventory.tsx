@@ -25,8 +25,10 @@ interface CountRow {
   product_unit_id: number;
   product_name: string;
   unit_label: string;
+  level: number;
+  editable: boolean;
   theoretical: number;
-  counted: string; // string pour permettre un champ vide tant que non saisi
+  counted: string;
 }
 
 interface AdjustmentResult {
@@ -71,9 +73,6 @@ const downloadCsv = (filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url);
 };
 
-// Telecharge le PDF officiel d'une session d'inventaire donnee (reutilise
-// pour la session qui vient d'etre validee ET pour une session passee
-// depuis l'historique).
 const downloadInventoryPdf = async (id: number): Promise<void> => {
   const url = new URL(`${API_BASE_URL}/inventory/${id}/pdf`);
   const shopId = getShopId();
@@ -144,6 +143,8 @@ const Inventory: React.FC = () => {
             product_unit_id: u.id,
             product_name: p.name,
             unit_label: u.label,
+            level: u.level,
+            editable: u.level === 1,
             theoretical: u.stock_qty,
             counted: '',
           });
@@ -173,8 +174,6 @@ const Inventory: React.FC = () => {
     if (next && history.length === 0) loadHistory();
   };
 
-  // Autorise uniquement des chiffres : bloque le signe negatif et toute
-  // autre saisie non numerique directement a la frappe ou au collage.
   const updateCounted = (unitId: number, value: string) => {
     const cleaned = value.replace(/[^0-9]/g, '');
     setRows(prev => prev.map(r => r.product_unit_id === unitId ? { ...r, counted: cleaned } : r));
@@ -187,6 +186,7 @@ const Inventory: React.FC = () => {
       if (product?.category?.id !== Number(categoryFilter)) return false;
     }
     if (hideUnchanged) {
+      if (!r.editable) return false;
       const hasCount = r.counted !== '';
       const delta = hasCount ? Number(r.counted) - r.theoretical : 0;
       if (!hasCount || delta === 0) return false;
@@ -194,10 +194,8 @@ const Inventory: React.FC = () => {
     return true;
   });
 
-  // Tous les produits reellement comptes (compte renseigne), pas seulement
-  // ceux avec un ecart -- pour que le rapport prouve l'exhaustivite du
-  // comptage, pas seulement les corrections.
-  const countedRows = rows.filter(r => r.counted !== '');
+  const editableRows = rows.filter(r => r.editable);
+  const countedRows = editableRows.filter(r => r.counted !== '');
   const rowsWithGap = countedRows.filter(r => Number(r.counted) !== r.theoretical);
   const nbCounted = countedRows.length;
   const nbDiscrepancies = rowsWithGap.length;
@@ -222,8 +220,8 @@ const Inventory: React.FC = () => {
       });
       setResults(res.results);
       setInventoryId(res.inventory_id);
-      load(); // recharge les stocks théoriques à jour
-      if (showHistory) loadHistory(); // recharge l'historique si ouvert
+      load();
+      if (showHistory) loadHistory();
     } catch (e: any) {
       setError(e.message || "Erreur lors de la validation de l'inventaire.");
     } finally {
@@ -243,8 +241,9 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const goToMovements = (id: number) => {
-    navigate(`${all_routes.stockMovements}?inventory_id=${id}`);
+  const goToMovements = (h: HistoryRow) => {
+    if (h.discrepancies === 0) return;
+    navigate(`${all_routes.stockMovements}?inventory_id=${h.id}`);
   };
 
   const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -266,7 +265,7 @@ const Inventory: React.FC = () => {
         <div className="d-flex gap-3 align-items-center">
           <div className="text-end">
             <div className="fs-11 text-muted">Comptés</div>
-            <div className="fw-700 fs-14">{nbCounted}/{rows.length}</div>
+            <div className="fw-700 fs-14">{nbCounted}/{editableRows.length}</div>
           </div>
           <div className="text-end">
             <div className="fs-11 text-muted">Écarts</div>
@@ -281,7 +280,7 @@ const Inventory: React.FC = () => {
             onClick={() => downloadCsv(
               'Feuille_comptage_' + todayStr().replace(/\//g,'-') + '.csv',
               ['Produit', 'Unite', 'Stock theorique', 'Stock compte', 'Ecart'],
-              rows.map(function(r) {
+              editableRows.map(function(r) {
                 return [r.product_name, r.unit_label, r.theoretical, r.counted || '', r.counted !== '' ? Number(r.counted) - r.theoretical : ''];
               })
             )}>
@@ -302,7 +301,6 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* Historique des sessions passees */}
       {showHistory && (
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-body p-0">
@@ -345,8 +343,14 @@ const Inventory: React.FC = () => {
                               {downloadingPdf === h.id ? <span className="spinner-border spinner-border-sm"/> : <><i className="ti ti-file-download"/>PDF</>}
                             </button>
                             <button className="btn btn-sm d-flex align-items-center gap-1"
-                              onClick={() => goToMovements(h.id)}
-                              style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 10px',fontSize:12}}>
+                              disabled={h.discrepancies === 0}
+                              title={h.discrepancies === 0 ? "Aucun mouvement de stock pour cette session : tous les produits étaient conformes" : undefined}
+                              onClick={() => goToMovements(h)}
+                              style={{
+                                background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 10px',fontSize:12,
+                                opacity: h.discrepancies === 0 ? 0.5 : 1,
+                                cursor: h.discrepancies === 0 ? 'not-allowed' : 'pointer',
+                              }}>
                               <i className="ti ti-arrows-exchange"/>Mouvements
                             </button>
                           </div>
@@ -361,7 +365,6 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* Résultats après soumission */}
       {results && inventoryId && (
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-body">
@@ -422,7 +425,6 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
-      {/* Filtres */}
       <div className="card border-0 shadow-sm mb-3">
         <div className="card-body p-3">
           <div className="row g-2 align-items-end">
@@ -450,9 +452,12 @@ const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {/* Tableau de comptage */}
       <div className="card border-0 shadow-sm">
         <div className="card-body p-0">
+          <div className="p-3 border-bottom fs-12 text-muted" style={{borderColor:'#e5e7eb'}}>
+            <i className="ti ti-info-circle me-1"/>
+            Seule l'unité de base (ex. Pièce) est comptable — les niveaux supérieurs (Carton, Paquet...) sont affichés à titre de référence uniquement, pour éviter de compter deux fois le même stock.
+          </div>
           {filteredRows.length === 0 ? (
             <div className="text-center py-5">
               <i className="ti ti-clipboard-list d-block mb-2" style={{fontSize:48,color:'#d1d5db'}}/>
@@ -475,24 +480,31 @@ const Inventory: React.FC = () => {
                     const hasCount = row.counted !== '';
                     const delta = hasCount ? Number(row.counted) - row.theoretical : null;
                     return (
-                      <tr key={row.product_unit_id}>
+                      <tr key={row.product_unit_id} style={{opacity: row.editable ? 1 : 0.6}}>
                         <td className="ps-3 align-middle fw-600 fs-13">{row.product_name}</td>
-                        <td className="align-middle fs-13">{row.unit_label}</td>
+                        <td className="align-middle fs-13">
+                          {row.unit_label}
+                          {!row.editable && <span className="badge ms-2" style={{background:'#f3f4f6',color:'#9ca3af',fontSize:10}}>Référence</span>}
+                        </td>
                         <td className="align-middle text-center fs-13 text-muted">{row.theoretical}</td>
                         <td className="align-middle text-center">
-                          <input type="number" min={0} step={1} inputMode="numeric" pattern="[0-9]*"
-                            placeholder="—"
-                            value={row.counted}
-                            onKeyDown={e => { if (e.key === '-' || e.key === '+' || e.key === 'e') e.preventDefault(); }}
-                            onChange={e => updateCounted(row.product_unit_id, e.target.value)}
-                            style={{
-                              width: 80, textAlign:'center', padding:'4px 6px',
-                              borderRadius: 6, border: '1px solid #e5e7eb',
-                              background: hasCount && delta !== 0 ? '#fff7ed' : '#fff',
-                            }}/>
+                          {row.editable ? (
+                            <input type="number" min={0} step={1} inputMode="numeric" pattern="[0-9]*"
+                              placeholder="—"
+                              value={row.counted}
+                              onKeyDown={e => { if (e.key === '-' || e.key === '+' || e.key === 'e') e.preventDefault(); }}
+                              onChange={e => updateCounted(row.product_unit_id, e.target.value)}
+                              style={{
+                                width: 80, textAlign:'center', padding:'4px 6px',
+                                borderRadius: 6, border: '1px solid #e5e7eb',
+                                background: hasCount && delta !== 0 ? '#fff7ed' : '#fff',
+                              }}/>
+                          ) : (
+                            <span className="fs-12 text-muted">non comptable</span>
+                          )}
                         </td>
                         <td className="align-middle text-center pe-3">
-                          {hasCount ? (
+                          {row.editable && hasCount ? (
                             <span className="fw-700 fs-13" style={{color: delta === 0 ? '#16a34a' : delta! > 0 ? '#16a34a' : '#dc2626'}}>
                               {fmt(delta!)}
                             </span>
@@ -510,7 +522,6 @@ const Inventory: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal confirmation */}
       {showConfirm && (
         <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)'}}>
           <div className="modal-dialog">
