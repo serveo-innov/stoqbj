@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../core/services/apiService';
 
 interface Movement {
@@ -9,6 +10,7 @@ interface Movement {
   stock_after: number;
   reason: string | null;
   reference: string | null;
+  inventory_id: number | null;
   moved_at: string;
   product_unit: { label: string; product: { name: string } };
   user: { name: string; firstname: string };
@@ -26,24 +28,37 @@ const typeConfig: Record<string, { label: string; color: string; bg: string; ico
 };
 
 const StockMovements: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const preselectedInventoryId = searchParams.get('inventory_id');
+
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
-  const [filters,   setFilters]   = useState({ type:'', from:'', to:'' });
+  const [filters,   setFilters]   = useState({ type:'', from:'', to:'', inventory_id: preselectedInventoryId || '' });
 
   useEffect(() => { load(); }, []);
 
-  const load = async () => {
+  const load = async (overrideFilters?: typeof filters) => {
+    const f = overrideFilters ?? filters;
     try {
       setLoading(true);
       const params: any = {};
-      if (filters.type) params.type = filters.type;
-      if (filters.from) params.from = filters.from;
-      if (filters.to)   params.to   = filters.to;
+      if (f.type)         params.type = f.type;
+      if (f.from)         params.from = f.from;
+      if (f.to)            params.to = f.to;
+      if (f.inventory_id)  params.inventory_id = f.inventory_id;
       const res = await api.get<any>('/stock/movements', params);
       setMovements(res.data || []);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
+  };
+
+  const clearInventoryFilter = () => {
+    const next = { ...filters, inventory_id: '' };
+    setFilters(next);
+    searchParams.delete('inventory_id');
+    setSearchParams(searchParams);
+    load(next);
   };
 
   const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -59,6 +74,18 @@ const StockMovements: React.FC = () => {
           </ol>
         </div>
       </div>
+
+      {preselectedInventoryId && (
+        <div className="alert mb-3 d-flex align-items-center gap-2"
+          style={{background:'#fff7ed',border:'1px solid #FED7AA',borderRadius:8,color:'#EA580C'}}>
+          <i className="ti ti-filter"/>
+          Filtré sur la session d'inventaire #{preselectedInventoryId}
+          <button className="btn btn-link btn-sm p-0 ms-auto" style={{color:'#F97316',textDecoration:'underline'}}
+            onClick={clearInventoryFilter}>
+            Voir tous les mouvements
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="alert mb-3" style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,color:'#dc2626'}}>
@@ -96,12 +123,12 @@ const StockMovements: React.FC = () => {
             <div className="col-md-3 d-flex gap-2">
               <button className="btn btn-sm flex-1"
                 style={{background:'#F97316',color:'#fff',borderRadius:8,border:'none',flex:1}}
-                onClick={load}>
+                onClick={() => load()}>
                 <i className="ti ti-search me-1"/>Filtrer
               </button>
               <button className="btn btn-sm"
                 style={{background:'#f3f4f6',borderRadius:8,border:'none'}}
-                onClick={() => { setFilters({type:'',from:'',to:''}); setTimeout(load,100); }}>
+                onClick={() => { const next = {type:'',from:'',to:'',inventory_id:''}; setFilters(next); searchParams.delete('inventory_id'); setSearchParams(searchParams); load(next); }}>
                 <i className="ti ti-x"/>
               </button>
             </div>
@@ -149,6 +176,9 @@ const StockMovements: React.FC = () => {
                           <span className="badge d-flex align-items-center gap-1" style={{background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}30`,fontSize:11,width:'fit-content'}}>
                             <i className={`ti ${cfg.icon}`}/>{cfg.label}
                           </span>
+                          {m.inventory_id && (
+                            <div className="fs-10 text-muted mt-1">Inventaire #{m.inventory_id}</div>
+                          )}
                         </td>
                         <td className="align-middle text-center">
                           <span className="fw-700" style={{color: m.quantity > 0 ? '#16a34a' : '#dc2626'}}>

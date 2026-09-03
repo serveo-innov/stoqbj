@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../core/services/apiService';
 import { API_BASE_URL } from '../../environment';
+import { all_routes } from '../router/all_routes';
 
 interface ProductUnit {
   id: number;
@@ -36,7 +38,17 @@ interface AdjustmentResult {
   message?: string;
 }
 
+interface HistoryRow {
+  id: number;
+  created_at: string;
+  created_by: string;
+  items_count: number;
+  discrepancies: number;
+  notes: string | null;
+}
+
 const todayStr = () => new Date().toLocaleDateString('fr-FR');
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
 const getToken = (): string | null => localStorage.getItem('stockone_token');
 const getShopId = (): number | null => {
@@ -59,7 +71,40 @@ const downloadCsv = (filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url);
 };
 
+// Telecharge le PDF officiel d'une session d'inventaire donnee (reutilise
+// pour la session qui vient d'etre validee ET pour une session passee
+// depuis l'historique).
+const downloadInventoryPdf = async (id: number): Promise<void> => {
+  const url = new URL(`${API_BASE_URL}/inventory/${id}/pdf`);
+  const shopId = getShopId();
+  if (shopId) url.searchParams.set('shop_id', String(shopId));
+  const token = getToken();
+
+  const response = await fetch(url.toString(), {
+    headers: { 'Accept': 'application/pdf', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.message || `Erreur ${response.status}`);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition');
+  const match = disposition && disposition.match(/filename="?(.+)"?/);
+  const filename = match ? match[1].replace(/"/g, '') : `inventaire-${id}.pdf`;
+
+  const link = document.createElement('a');
+  const objectUrl = window.URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
+};
+
 const Inventory: React.FC = () => {
+  const navigate = useNavigate();
+
   const [products,   setProducts]   = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -73,8 +118,13 @@ const Inventory: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [results,    setResults]    = useState<AdjustmentResult[] | null>(null);
   const [inventoryId, setInventoryId] = useState<number | null>(null);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<number | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const [showHistory,   setShowHistory]   = useState(false);
+  const [history,       setHistory]       = useState<HistoryRow[]>([]);
+  const [loadingHistory,setLoadingHistory] = useState(false);
+  const [historyError,  setHistoryError]  = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -102,6 +152,25 @@ const Inventory: React.FC = () => {
       setRows(initialRows);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
+  };
+
+  const loadHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      setHistoryError(null);
+      const res = await api.get<{ data: HistoryRow[] }>('/inventory/history');
+      setHistory(res.data || []);
+    } catch (e: any) {
+      setHistoryError(e.message || "Erreur lors du chargement de l'historique.");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const toggleHistory = () => {
+    const next = !showHistory;
+    setShowHistory(next);
+    if (next && history.length === 0) loadHistory();
   };
 
   // Autorise uniquement des chiffres : bloque le signe negatif et toute
@@ -154,6 +223,7 @@ const Inventory: React.FC = () => {
       setResults(res.results);
       setInventoryId(res.inventory_id);
       load(); // recharge les stocks théoriques à jour
+      if (showHistory) loadHistory(); // recharge l'historique si ouvert
     } catch (e: any) {
       setError(e.message || "Erreur lors de la validation de l'inventaire.");
     } finally {
@@ -161,41 +231,20 @@ const Inventory: React.FC = () => {
     }
   };
 
-  const handleDownloadPdf = async () => {
-    if (!inventoryId) return;
-    setDownloadingPdf(true);
+  const handleDownloadPdf = async (id: number) => {
+    setDownloadingPdf(id);
     setError(null);
     try {
-      const url = new URL(`${API_BASE_URL}/inventory/${inventoryId}/pdf`);
-      const shopId = getShopId();
-      if (shopId) url.searchParams.set('shop_id', String(shopId));
-      const token = getToken();
-
-      const response = await fetch(url.toString(), {
-        headers: { 'Accept': 'application/pdf', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || `Erreur ${response.status}`);
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get('Content-Disposition');
-      const match = disposition && disposition.match(/filename="?(.+)"?/);
-      const filename = match ? match[1].replace(/"/g, '') : `inventaire-${inventoryId}.pdf`;
-
-      const link = document.createElement('a');
-      const objectUrl = window.URL.createObjectURL(blob);
-      link.href = objectUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(objectUrl);
+      await downloadInventoryPdf(id);
     } catch (e: any) {
       setError(e.message || "Erreur lors du téléchargement du PDF.");
     } finally {
-      setDownloadingPdf(false);
+      setDownloadingPdf(null);
     }
+  };
+
+  const goToMovements = (id: number) => {
+    navigate(`${all_routes.stockMovements}?inventory_id=${id}`);
   };
 
   const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -223,6 +272,10 @@ const Inventory: React.FC = () => {
             <div className="fs-11 text-muted">Écarts</div>
             <div className="fw-700 fs-14" style={{color: nbDiscrepancies > 0 ? '#dc2626' : '#16a34a'}}>{nbDiscrepancies}</div>
           </div>
+          <button className="btn d-flex align-items-center gap-2" onClick={toggleHistory}
+            style={{background: showHistory ? '#1a1a1a' : '#f3f4f6', color: showHistory ? '#fff' : '#1a1a1a', border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600}}>
+            <i className="ti ti-history fs-16"/>Historique
+          </button>
           <button className="btn d-flex align-items-center gap-2"
             style={{background:'#f3f4f6',border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600}}
             onClick={() => downloadCsv(
@@ -249,8 +302,67 @@ const Inventory: React.FC = () => {
         </div>
       )}
 
+      {/* Historique des sessions passees */}
+      {showHistory && (
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-body p-0">
+            <div className="p-3 border-bottom" style={{borderColor:'#e5e7eb'}}>
+              <h6 className="fw-700 mb-0 d-flex align-items-center gap-2">
+                <div style={{width:4,height:20,background:'#1a1a1a',borderRadius:2}}/>
+                Historique des inventaires
+              </h6>
+            </div>
+            {loadingHistory ? (
+              <div className="text-center py-4"><div className="spinner-border spinner-border-sm" style={{color:'#F97316'}} role="status"/></div>
+            ) : historyError ? (
+              <div className="p-3 fs-13" style={{color:'#dc2626'}}>{historyError}</div>
+            ) : history.length === 0 ? (
+              <div className="text-center py-4"><p className="text-muted fs-13">Aucun inventaire enregistré pour l'instant</p></div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover mb-0">
+                  <thead style={{background:'#f8f9fa'}}>
+                    <tr>
+                      <th className="fs-12 fw-600 border-0 ps-3">Date</th>
+                      <th className="fs-12 fw-600 border-0">Réalisé par</th>
+                      <th className="fs-12 fw-600 border-0 text-center">Produits vérifiés</th>
+                      <th className="fs-12 fw-600 border-0 text-center">Écarts</th>
+                      <th className="fs-12 fw-600 border-0 pe-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map(h => (
+                      <tr key={h.id}>
+                        <td className="ps-3 align-middle fs-13">{fmtDate(h.created_at)}</td>
+                        <td className="align-middle fs-13">{h.created_by || '—'}</td>
+                        <td className="align-middle text-center fs-13">{h.items_count}</td>
+                        <td className="align-middle text-center fs-13 fw-600" style={{color: h.discrepancies > 0 ? '#dc2626' : '#16a34a'}}>{h.discrepancies}</td>
+                        <td className="align-middle pe-3">
+                          <div className="d-flex gap-2">
+                            <button className="btn btn-sm d-flex align-items-center gap-1" disabled={downloadingPdf === h.id}
+                              onClick={() => handleDownloadPdf(h.id)}
+                              style={{background:'#F97316',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:12}}>
+                              {downloadingPdf === h.id ? <span className="spinner-border spinner-border-sm"/> : <><i className="ti ti-file-download"/>PDF</>}
+                            </button>
+                            <button className="btn btn-sm d-flex align-items-center gap-1"
+                              onClick={() => goToMovements(h.id)}
+                              style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 10px',fontSize:12}}>
+                              <i className="ti ti-arrows-exchange"/>Mouvements
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Résultats après soumission */}
-      {results && (
+      {results && inventoryId && (
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-body">
             <h6 className="fw-700 mb-3 d-flex align-items-center gap-2">
@@ -286,9 +398,9 @@ const Inventory: React.FC = () => {
               </table>
             </div>
             <div className="d-flex gap-2 mt-3">
-              <button className="btn btn-sm d-flex align-items-center gap-1" disabled={downloadingPdf} onClick={handleDownloadPdf}
+              <button className="btn btn-sm d-flex align-items-center gap-1" disabled={downloadingPdf === inventoryId} onClick={() => handleDownloadPdf(inventoryId)}
                 style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,padding:'6px 14px',fontWeight:600}}>
-                {downloadingPdf ? <span className="spinner-border spinner-border-sm"/> : <><i className="ti ti-file-download"/>Rapport PDF</>}
+                {downloadingPdf === inventoryId ? <span className="spinner-border spinner-border-sm"/> : <><i className="ti ti-file-download"/>Rapport PDF</>}
               </button>
               <button className="btn btn-sm" onClick={() => downloadCsv(
                 'Resultat_inventaire_' + todayStr().replace(/\//g,'-') + '.csv',
