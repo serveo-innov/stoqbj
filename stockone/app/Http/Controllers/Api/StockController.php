@@ -181,6 +181,7 @@ class StockController extends Controller
             new OA\Parameter(name: 'type',            in: 'query', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'from',            in: 'query', schema: new OA\Schema(type: 'string', format: 'date')),
             new OA\Parameter(name: 'to',              in: 'query', schema: new OA\Schema(type: 'string', format: 'date')),
+            new OA\Parameter(name: 'inventory_id',    in: 'query', schema: new OA\Schema(type: 'integer')),
         ],
         responses: [new OA\Response(response: 200, description: 'Historique retourne')]
     )]
@@ -196,6 +197,7 @@ class StockController extends Controller
         if ($request->filled('type'))            $query->where('type', $request->type);
         if ($request->filled('from'))            $query->whereDate('moved_at', '>=', $request->from);
         if ($request->filled('to'))              $query->whereDate('moved_at', '<=', $request->to);
+        if ($request->filled('inventory_id'))    $query->where('inventory_id', $request->inventory_id);
 
         return response()->json($query->paginate(50));
     }
