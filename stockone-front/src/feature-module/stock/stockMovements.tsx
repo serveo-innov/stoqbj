@@ -17,6 +17,13 @@ interface Movement {
   supplier: { name: string } | null;
 }
 
+interface PaginatedResponse {
+  data: Movement[];
+  current_page: number;
+  last_page: number;
+  total: number;
+}
+
 const typeConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   entry:        { label:'Entrée',      color:'#16a34a', bg:'#f0fdf4', icon:'ti-arrow-down-circle' },
   sale:         { label:'Vente',       color:'#F97316', bg:'#fff7ed', icon:'ti-shopping-cart' },
@@ -37,32 +44,63 @@ const StockMovements: React.FC = () => {
   const [error,     setError]     = useState<string | null>(null);
   const [filters,   setFilters]   = useState({ type:'', from:'', to:'', inventory_id: preselectedInventoryId || '' });
 
-  useEffect(() => { load(); }, []);
+  const [page,     setPage]     = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total,    setTotal]    = useState(0);
 
-  const load = async (overrideFilters?: typeof filters) => {
+  useEffect(() => { load(undefined, 1); }, []);
+
+  const load = async (overrideFilters?: typeof filters, overridePage?: number) => {
     const f = overrideFilters ?? filters;
+    const p = overridePage ?? page;
     try {
       setLoading(true);
-      const params: any = {};
+      const params: any = { page: p };
       if (f.type)         params.type = f.type;
       if (f.from)         params.from = f.from;
       if (f.to)            params.to = f.to;
       if (f.inventory_id)  params.inventory_id = f.inventory_id;
-      const res = await api.get<any>('/stock/movements', params);
+      const res = await api.get<PaginatedResponse>('/stock/movements', params);
       setMovements(res.data || []);
+      setPage(res.current_page || 1);
+      setLastPage(res.last_page || 1);
+      setTotal(res.total || 0);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
+
+  const applyFilters = () => load(filters, 1); // toute nouvelle recherche repart page 1
 
   const clearInventoryFilter = () => {
     const next = { ...filters, inventory_id: '' };
     setFilters(next);
     searchParams.delete('inventory_id');
     setSearchParams(searchParams);
-    load(next);
+    load(next, 1);
+  };
+
+  const resetFilters = () => {
+    const next = {type:'',from:'',to:'',inventory_id:''};
+    setFilters(next);
+    searchParams.delete('inventory_id');
+    setSearchParams(searchParams);
+    load(next, 1);
+  };
+
+  const goToPage = (p: number) => {
+    if (p < 1 || p > lastPage || p === page) return;
+    load(filters, p);
   };
 
   const fmt = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  // Colonne Motif : affiche le motif ET la reference quand les deux sont
+  // renseignes (auparavant seul reason etait affiche, reference disparaissait
+  // silencieusement de cette vue).
+  const motifCell = (m: Movement) => {
+    if (m.reason && m.reference) return `${m.reason} · ${m.reference}`;
+    return m.reason || m.reference || '—';
+  };
 
   return (
     <div>
@@ -128,12 +166,12 @@ const StockMovements: React.FC = () => {
             <div className="col-md-3 d-flex gap-2">
               <button className="btn btn-sm flex-1"
                 style={{background:'#F97316',color:'#fff',borderRadius:8,border:'none',flex:1}}
-                onClick={() => load()}>
+                onClick={applyFilters}>
                 <i className="ti ti-search me-1"/>Filtrer
               </button>
               <button className="btn btn-sm"
                 style={{background:'#f3f4f6',borderRadius:8,border:'none'}}
-                onClick={() => { const next = {type:'',from:'',to:'',inventory_id:''}; setFilters(next); searchParams.delete('inventory_id'); setSearchParams(searchParams); load(next); }}>
+                onClick={resetFilters}>
                 <i className="ti ti-x"/>
               </button>
             </div>
@@ -153,53 +191,75 @@ const StockMovements: React.FC = () => {
               <p className="text-muted">Aucun mouvement trouvé</p>
             </div>
           ) : (
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead style={{background:'#f8f9fa'}}>
-                  <tr>
-                    <th className="fs-12 fw-600 border-0 ps-3">Date</th>
-                    <th className="fs-12 fw-600 border-0">Produit</th>
-                    <th className="fs-12 fw-600 border-0">Type</th>
-                    <th className="fs-12 fw-600 border-0 text-center">Qté</th>
-                    <th className="fs-12 fw-600 border-0 text-center">Avant</th>
-                    <th className="fs-12 fw-600 border-0 text-center">Après</th>
-                    <th className="fs-12 fw-600 border-0">Utilisateur</th>
-                    <th className="fs-12 fw-600 border-0">Motif</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movements.map(m => {
-                    const cfg = typeConfig[m.type] || { label:m.type, color:'#6b7280', bg:'#f3f4f6', icon:'ti-circle' };
-                    return (
-                      <tr key={m.id}>
-                        <td className="ps-3 align-middle fs-12 text-muted">{fmt(m.moved_at)}</td>
-                        <td className="align-middle">
-                          <div className="fw-600 fs-13">{m.product_unit?.product?.name}</div>
-                          <div className="fs-11 text-muted">{m.product_unit?.label}</div>
-                        </td>
-                        <td className="align-middle">
-                          <span className="badge d-flex align-items-center gap-1" style={{background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}30`,fontSize:11,width:'fit-content'}}>
-                            <i className={`ti ${cfg.icon}`}/>{cfg.label}
-                          </span>
-                          {m.inventory_id && (
-                            <div className="fs-10 text-muted mt-1">Inventaire #{m.inventory_id}</div>
-                          )}
-                        </td>
-                        <td className="align-middle text-center">
-                          <span className="fw-700" style={{color: m.quantity > 0 ? '#16a34a' : '#dc2626'}}>
-                            {m.quantity > 0 ? '+' : ''}{m.quantity}
-                          </span>
-                        </td>
-                        <td className="align-middle text-center fs-13 text-muted">{m.stock_before}</td>
-                        <td className="align-middle text-center fs-13 fw-600">{m.stock_after}</td>
-                        <td className="align-middle fs-12">{m.user?.firstname} {m.user?.name}</td>
-                        <td className="align-middle fs-12 text-muted">{m.reason || m.reference || '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-responsive">
+                <table className="table table-hover mb-0">
+                  <thead style={{background:'#f8f9fa'}}>
+                    <tr>
+                      <th className="fs-12 fw-600 border-0 ps-3">Date</th>
+                      <th className="fs-12 fw-600 border-0">Produit</th>
+                      <th className="fs-12 fw-600 border-0">Type</th>
+                      <th className="fs-12 fw-600 border-0 text-center">Qté</th>
+                      <th className="fs-12 fw-600 border-0 text-center">Avant</th>
+                      <th className="fs-12 fw-600 border-0 text-center">Après</th>
+                      <th className="fs-12 fw-600 border-0">Utilisateur</th>
+                      <th className="fs-12 fw-600 border-0">Motif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movements.map(m => {
+                      const cfg = typeConfig[m.type] || { label:m.type, color:'#6b7280', bg:'#f3f4f6', icon:'ti-circle' };
+                      return (
+                        <tr key={m.id}>
+                          <td className="ps-3 align-middle fs-12 text-muted">{fmt(m.moved_at)}</td>
+                          <td className="align-middle">
+                            <div className="fw-600 fs-13">{m.product_unit?.product?.name}</div>
+                            <div className="fs-11 text-muted">{m.product_unit?.label}</div>
+                          </td>
+                          <td className="align-middle">
+                            <span className="badge d-flex align-items-center gap-1" style={{background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}30`,fontSize:11,width:'fit-content'}}>
+                              <i className={`ti ${cfg.icon}`}/>{cfg.label}
+                            </span>
+                            {m.inventory_id && (
+                              <div className="fs-10 text-muted mt-1">Inventaire #{m.inventory_id}</div>
+                            )}
+                          </td>
+                          <td className="align-middle text-center">
+                            <span className="fw-700" style={{color: m.quantity > 0 ? '#16a34a' : '#dc2626'}}>
+                              {m.quantity > 0 ? '+' : ''}{m.quantity}
+                            </span>
+                          </td>
+                          <td className="align-middle text-center fs-13 text-muted">{m.stock_before}</td>
+                          <td className="align-middle text-center fs-13 fw-600">{m.stock_after}</td>
+                          <td className="align-middle fs-12">{m.user?.firstname} {m.user?.name}</td>
+                          <td className="align-middle fs-12 text-muted">{motifCell(m)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {lastPage > 1 && (
+                <div className="d-flex align-items-center justify-content-between p-3 border-top" style={{borderColor:'#e5e7eb'}}>
+                  <div className="fs-12 text-muted">
+                    Page {page} sur {lastPage} — {total} mouvement{total > 1 ? 's' : ''} au total
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-sm d-flex align-items-center gap-1" disabled={page <= 1}
+                      onClick={() => goToPage(page - 1)}
+                      style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 12px',fontSize:12,opacity: page <= 1 ? 0.5 : 1}}>
+                      <i className="ti ti-chevron-left"/>Précédent
+                    </button>
+                    <button className="btn btn-sm d-flex align-items-center gap-1" disabled={page >= lastPage}
+                      onClick={() => goToPage(page + 1)}
+                      style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 12px',fontSize:12,opacity: page >= lastPage ? 0.5 : 1}}>
+                      Suivant<i className="ti ti-chevron-right"/>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

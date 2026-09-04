@@ -237,7 +237,7 @@ const StockEntry: React.FC = () => {
                       </div>
                     )}
                     <div className={form.reason !== 'Retour client' ? 'col-6' : 'col-12'}>
-                      <label className="form-label fs-13 fw-600">Ref. bon livraison</label>
+                      <label className="form-label fs-13 fw-600">Référence (optionnel)</label>
                       <input type="text" className="form-control" placeholder="BL-2026-001"
                         value={form.reference} onChange={e => setForm(f=>({...f,reference:e.target.value}))}
                         style={{borderColor:'#e5e7eb',borderRadius:8}}/>
