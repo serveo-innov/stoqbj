@@ -214,6 +214,7 @@ class StockController extends Controller
         $shopId = $request->user()->shop_id;
 
         $units = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId)->where('is_active', true))
+            ->where('level', 1) // seule l'unite de base est source de verite pour les alertes, evite les doublons/incoherences entre niveaux
             ->with('product.category', 'product.units')
             ->get()
             ->filter(fn($unit) => $unit->stock_qty <= $unit->stock_alert_threshold)
