@@ -2,15 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../core/services/apiService';
 import { all_routes } from '../router/all_routes';
+import { decomposeStock } from '../../core/utils/stockDecompose';
+import type { DecomposableUnit } from '../../core/utils/stockDecompose';
 
 interface StockAlert {
   product_unit_id: number;
   product_name: string;
   unit_label: string;
+  level: number;
+  qty_in_parent: number;
   category: string | null;
   stock_qty: number;
   stock_alert_threshold: number;
   status: 'out_of_stock' | 'low_stock';
+  sibling_units: DecomposableUnit[];
 }
 
 const StockAlerts: React.FC = () => {
@@ -34,6 +39,12 @@ const StockAlerts: React.FC = () => {
 
   return (
     <div>
+      <style>{`
+        @keyframes blink-badge {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.35; }
+        }
+      `}</style>
       <div className="page-header">
         <div>
           <h4 className="page-title">Alertes Stock</h4>
@@ -140,12 +151,15 @@ const StockAlerts: React.FC = () => {
                           <td className="align-middle fs-13">{a.unit_label}</td>
                           <td className="align-middle fs-13 text-muted">{a.category || '—'}</td>
                           <td className="align-middle text-center">
-                            <span className="badge" style={{background:'#fef2f2',color:'#dc2626',border:'1px solid #fca5a5',fontSize:12}}>
+                            <span className="badge" style={{background:'#fef2f2',color:'#dc2626',border:'1px solid #fca5a5',fontSize:12,animation:'blink-badge 1s ease-in-out 3'}}>
                               0 unité
                             </span>
+                            {a.level === 1 && a.sibling_units.length > 1 && (
+                              <div className="fs-11 text-muted mt-1">{decomposeStock(a.stock_qty, a.sibling_units)}</div>
+                            )}
                           </td>
                           <td className="align-middle text-end pe-3">
-                            <Link to={all_routes.stockEntry} className="btn btn-sm"
+                            <Link to={`${all_routes.stockEntry}?unit=${a.product_unit_id}`} className="btn btn-sm"
                               style={{background:'#F97316',color:'#fff',borderRadius:6,fontSize:12,border:'none'}}>
                               <i className="ti ti-plus me-1"/>Réapprovisionner
                             </Link>
@@ -175,6 +189,7 @@ const StockAlerts: React.FC = () => {
                       <tr>
                         <th className="fs-12 fw-600 border-0 ps-3">Produit</th>
                         <th className="fs-12 fw-600 border-0">Unité</th>
+                        <th className="fs-12 fw-600 border-0">Catégorie</th>
                         <th className="fs-12 fw-600 border-0 text-center">Stock</th>
                         <th className="fs-12 fw-600 border-0 text-center">Seuil</th>
                         <th className="fs-12 fw-600 border-0 text-end pe-3">Action</th>
@@ -185,12 +200,16 @@ const StockAlerts: React.FC = () => {
                         <tr key={a.product_unit_id}>
                           <td className="ps-3 align-middle fw-600 fs-13">{a.product_name}</td>
                           <td className="align-middle fs-13">{a.unit_label}</td>
+                          <td className="align-middle fs-13 text-muted">{a.category || '—'}</td>
                           <td className="align-middle text-center">
-                            <span className="fw-700 fs-14" style={{color:'#EA580C'}}>{a.stock_qty}</span>
+                            <span className="fw-700 fs-14" style={{color:'#EA580C',animation:'blink-badge 1s ease-in-out 3',display:'inline-block'}}>{a.stock_qty}</span>
+                            {a.level === 1 && a.sibling_units.length > 1 && (
+                              <div className="fs-11 text-muted">{decomposeStock(a.stock_qty, a.sibling_units)}</div>
+                            )}
                           </td>
                           <td className="align-middle text-center fs-13 text-muted">{a.stock_alert_threshold}</td>
                           <td className="align-middle text-end pe-3">
-                            <Link to={all_routes.stockEntry} className="btn btn-sm"
+                            <Link to={`${all_routes.stockEntry}?unit=${a.product_unit_id}`} className="btn btn-sm"
                               style={{background:'#fff7ed',color:'#EA580C',borderRadius:6,fontSize:12,border:'1px solid #FED7AA'}}>
                               <i className="ti ti-arrow-up me-1"/>Commander
                             </Link>
