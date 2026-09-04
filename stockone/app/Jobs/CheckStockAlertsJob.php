@@ -38,6 +38,7 @@ class CheckStockAlertsJob implements ShouldQueue
         $units = ProductUnit::whereHas('product', fn($q) =>
             $q->where('shop_id', $shop->id)->where('is_active', true)
         )
+        ->where('level', 1) // seule l'unite de base est source de verite, evite les doublons entre niveaux (coherent avec StockController::alerts())
         ->with('product')
         ->get()->filter(fn($u) => $u->stock_qty <= $u->stock_alert_threshold)->values();
 
