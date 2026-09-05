@@ -20,6 +20,13 @@ interface Supplier {
   name: string;
 }
 
+interface MarginInfo {
+  wholesale_percent: number | null;
+  detail_percent: number | null;
+  extra_percent: number | null;
+  has_negative: boolean;
+}
+
 const StockEntry: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -33,6 +40,7 @@ const StockEntry: React.FC = () => {
   const [error,     setError]     = useState<string | null>(null);
   const [search,    setSearch]    = useState('');
   const [justUpdatedId, setJustUpdatedId] = useState<number | null>(null);
+  const [marginInfo, setMarginInfo] = useState<MarginInfo | null>(null);
 
   const [form, setForm] = useState({
     product_unit_id: '',
@@ -83,10 +91,13 @@ const StockEntry: React.FC = () => {
 
   const selectedUnit = units.find(u => u.id === Number(form.product_unit_id));
 
+  const fmtPct = (n: number | null) => n === null ? '—' : `${n > 0 ? '+' : ''}${n}%`;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setMarginInfo(null);
     try {
       const payload: any = {
         product_unit_id: Number(form.product_unit_id),
@@ -100,6 +111,7 @@ const StockEntry: React.FC = () => {
 
       const res = await api.post<any>('/stock/entry', payload);
       setSuccess(res.message || `Stock mis a jour : ${res.stock_before} -> ${res.stock_after} unites`);
+      if (res.margins) setMarginInfo(res.margins);
       setJustUpdatedId(Number(form.product_unit_id));
       setTimeout(() => setJustUpdatedId(null), 4000);
       setForm(f => ({ ...f, quantity:'', supplier_id:'', unit_cost:'', reference:'', reason:'Réapprovisionnement', moved_at:'' }));
@@ -134,6 +146,51 @@ const StockEntry: React.FC = () => {
           <i className="ti ti-circle-check fs-18"/><strong>{success}</strong>
         </div>
       )}
+
+      {marginInfo && (
+        <div className="alert mb-3"
+          style={{
+            background: marginInfo.has_negative ? '#fef2f2' : '#fff7ed',
+            border: `1px solid ${marginInfo.has_negative ? '#fca5a5' : '#FED7AA'}`,
+            borderRadius:8,
+            color: marginInfo.has_negative ? '#dc2626' : '#EA580C',
+          }}>
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <i className={`ti ${marginInfo.has_negative ? 'ti-alert-triangle' : 'ti-percentage'} fs-18`}/>
+            <strong>
+              {marginInfo.has_negative
+                ? "Attention — au moins un prix de vente passe sous le prix d'achat (vente à perte)"
+                : "Impact sur la marge suite au changement de prix d'achat"}
+            </strong>
+          </div>
+          <div className="row g-2 fs-13">
+            <div className="col-4">
+              <div className="text-muted fs-11">Gros</div>
+              <div className="fw-700" style={{color: (marginInfo.wholesale_percent ?? 0) < 0 ? '#dc2626' : 'inherit'}}>
+                {fmtPct(marginInfo.wholesale_percent)}
+              </div>
+            </div>
+            <div className="col-4">
+              <div className="text-muted fs-11">Détail</div>
+              <div className="fw-700" style={{color: (marginInfo.detail_percent ?? 0) < 0 ? '#dc2626' : 'inherit'}}>
+                {fmtPct(marginInfo.detail_percent)}
+              </div>
+            </div>
+            <div className="col-4">
+              <div className="text-muted fs-11">Extra</div>
+              <div className="fw-700" style={{color: (marginInfo.extra_percent ?? 0) < 0 ? '#dc2626' : 'inherit'}}>
+                {fmtPct(marginInfo.extra_percent)}
+              </div>
+            </div>
+          </div>
+          {marginInfo.has_negative && (
+            <div className="fs-12 mt-2">
+              Pensez à ajuster le prix de vente concerné depuis le Catalogue — cette alerte reste aussi visible dans les notifications générales.
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="alert mb-3 d-flex align-items-center gap-2"
           style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,color:'#dc2626'}}>
