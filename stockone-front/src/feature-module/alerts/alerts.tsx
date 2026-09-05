@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../core/services/apiService';
+import { all_routes } from '../router/all_routes';
 
 interface AlertItem {
   id: number;
@@ -8,7 +10,7 @@ interface AlertItem {
   is_resolved: boolean;
   meta: Record<string, any> | null;
   triggered_at: string;
-  product_unit: { label: string; product: { name: string } } | null;
+  product_unit: { label: string; product: { id: number; name: string } } | null;
 }
 
 interface AlertCounts {
@@ -37,6 +39,7 @@ const typeConfig: Record<string, { label: string; color: string; bg: string; ico
   stock_critical:      { label:'Stock critique',         color:'#dc2626', bg:'#fef2f2', icon:'ti-alert-octagon' },
   credit_overdue:      { label:'Crédit en retard',       color:'#7c3aed', bg:'#f5f3ff', icon:'ti-credit-card-off' },
   subscription_expiry: { label:'Abonnement expirant',    color:'#d97706', bg:'#fffbeb', icon:'ti-calendar-exclamation' },
+  margin_negative:     { label:'Marge négative',         color:'#dc2626', bg:'#fef2f2', icon:'ti-trending-down' },
 };
 
 const getTypeConfig = (type: string) => {
@@ -49,6 +52,7 @@ const getTypeConfig = (type: string) => {
 
 const fmt = (n: string | number) => new Intl.NumberFormat('fr-FR').format(Number(n)) + ' F';
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+const fmtPct = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${n > 0 ? '+' : ''}${n}%`;
 
 const Alerts: React.FC = () => {
   const [tab, setTab] = useState<'alerts' | 'suggestions'>('alerts');
@@ -144,6 +148,27 @@ const Alerts: React.FC = () => {
     );
   };
 
+  const renderMarginAlert = (a: AlertItem) => {
+    const meta = a.meta || {};
+    const productId = a.product_unit?.product?.id;
+    return (
+      <div className="mt-1">
+        <div className="d-flex gap-3 fs-12">
+          <span>Gros: <strong style={{color: (meta.wholesale_percent ?? 0) < 0 ? '#dc2626' : 'inherit'}}>{fmtPct(meta.wholesale_percent)}</strong></span>
+          <span>Détail: <strong style={{color: (meta.detail_percent ?? 0) < 0 ? '#dc2626' : 'inherit'}}>{fmtPct(meta.detail_percent)}</strong></span>
+          <span>Extra: <strong style={{color: (meta.extra_percent ?? 0) < 0 ? '#dc2626' : 'inherit'}}>{fmtPct(meta.extra_percent)}</strong></span>
+        </div>
+        {productId && (
+          <Link to={all_routes.productDetail.replace(':id', String(productId))}
+            className="btn btn-sm mt-2 d-inline-flex align-items-center gap-1"
+            style={{background:'#F97316',color:'#fff',border:'none',borderRadius:6,fontSize:11,padding:'4px 10px'}}>
+            <i className="ti ti-edit"/>Modifier le prix
+          </Link>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -164,7 +189,6 @@ const Alerts: React.FC = () => {
         </div>
       )}
 
-      {/* Compteurs */}
       {counts && (
         <div className="row g-3 mb-4">
           <div className="col-md-3">
@@ -194,7 +218,6 @@ const Alerts: React.FC = () => {
         </div>
       )}
 
-      {/* Onglets */}
       <div className="d-flex gap-2 mb-3">
         <button className="btn btn-sm"
           onClick={() => setTab('alerts')}
@@ -222,7 +245,6 @@ const Alerts: React.FC = () => {
       {tab === 'alerts' ? (
         <div className="card border-0 shadow-sm">
           <div className="card-body p-0">
-            {/* Filtres */}
             <div className="p-3 border-bottom d-flex gap-2 flex-wrap align-items-center" style={{borderColor:'#e5e7eb'}}>
               <select className="form-select form-select-sm" style={{width:'auto',borderColor:'#e5e7eb',borderRadius:8}}
                 value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
@@ -232,6 +254,7 @@ const Alerts: React.FC = () => {
                 <option value="stock_critical">Stock critique</option>
                 <option value="credit_overdue">Crédit en retard</option>
                 <option value="subscription_expiry">Abonnement expirant</option>
+                <option value="margin_negative">Marge négative</option>
               </select>
               <div className="form-check form-switch ms-2">
                 <input className="form-check-input" type="checkbox" id="unreadOnly"
@@ -277,7 +300,7 @@ const Alerts: React.FC = () => {
                             {a.product_unit.product.name} — {a.product_unit.label}
                           </div>
                         )}
-                        {renderMeta(a.meta)}
+                        {a.type === 'margin_negative' ? renderMarginAlert(a) : renderMeta(a.meta)}
                         <div className="fs-11 text-muted mt-1">{fmtDate(a.triggered_at)}</div>
                       </div>
                       {!a.is_read && (
@@ -358,7 +381,6 @@ const Alerts: React.FC = () => {
         </div>
       )}
 
-      {/* Modal rejet */}
       {rejectTarget && (
         <div className="modal show d-block" style={{background:'rgba(0,0,0,0.5)'}}>
           <div className="modal-dialog">
