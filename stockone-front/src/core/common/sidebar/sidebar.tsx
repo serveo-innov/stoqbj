@@ -86,7 +86,7 @@ const AppSidebar: React.FC = () => {
           <>
             <Divider label="Rapports" mini={miniSidebar}/>
             <SLink to={all_routes.reports}       icon="ti-chart-bar"        label="Rapports"        mini={miniSidebar} active={isActive(all_routes.reports)}/>
-            <SLink to={all_routes.alerts}        icon="ti-sparkles"         label="Alertes IA"      mini={miniSidebar} active={isActive(all_routes.alerts)}/>
+            <SLink to={all_routes.alerts}        icon="ti-sparkles"         label="Alertes & IA"      mini={miniSidebar} active={isActive(all_routes.alerts)}/>
           </>
         )}
 

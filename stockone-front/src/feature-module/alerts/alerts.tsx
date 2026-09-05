@@ -173,10 +173,10 @@ const Alerts: React.FC = () => {
     <div>
       <div className="page-header">
         <div>
-          <h4 className="page-title">Alertes IA</h4>
+          <h4 className="page-title">Alertes & IA</h4>
           <ol className="breadcrumb mb-0">
             <li className="breadcrumb-item fs-13 text-muted">Rapports</li>
-            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Alertes IA</li>
+            <li className="breadcrumb-item fs-13 active" style={{color:'#F97316'}}>Alertes & IA</li>
           </ol>
         </div>
       </div>
