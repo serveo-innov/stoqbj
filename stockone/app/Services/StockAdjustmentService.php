@@ -8,12 +8,17 @@ use Illuminate\Support\Facades\DB;
 
 class StockAdjustmentService
 {
+    public function __construct(
+        private readonly AlertResolutionService $alertResolver
+    ) {}
+
     /**
      * Applique un ajustement de stock (ajout ou retrait) sur une unite de
      * produit, et enregistre le mouvement correspondant. Centralise ici
      * pour eviter la duplication entre StockController::adjustment() et
      * les futurs flux (Inventaire, etc.) qui doivent produire exactement
-     * le meme comportement.
+     * le meme comportement. Resout aussi automatiquement les alertes de
+     * stock devenues obsoletes si le stock repasse au-dessus du seuil.
      *
      * @param  int         $shopId
      * @param  int         $productUnitId
@@ -38,7 +43,7 @@ class StockAdjustmentService
         $unit = ProductUnit::whereHas('product', fn ($q) => $q->where('shop_id', $shopId))
             ->findOrFail($productUnitId);
 
-        return DB::transaction(function () use ($unit, $quantity, $type, $reason, $shopId, $userId, $inventoryId) {
+        $result = DB::transaction(function () use ($unit, $quantity, $type, $reason, $shopId, $userId, $inventoryId) {
             $result = $unit->applyStockDelta($quantity, allowNegative: false);
 
             StockMovement::create([
@@ -62,5 +67,9 @@ class StockAdjustmentService
                 'unit'        => $unit->fresh(),
             ];
         });
+
+        $this->alertResolver->resolveStockAlerts($shopId, $result['unit']);
+
+        return $result;
     }
 }

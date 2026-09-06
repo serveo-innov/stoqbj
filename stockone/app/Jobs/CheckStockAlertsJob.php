@@ -70,6 +70,18 @@ class CheckStockAlertsJob implements ShouldQueue
             ]);
         }
 
+        // Filet de securite : resoud les alertes de stock devenues
+        // obsoletes (stock repasse au-dessus du seuil) pour les unites
+        // qui ne sont plus dans la liste des unites actuellement en
+        // alerte, meme si le chemin qui a modifie leur stock n'a pas
+        // deja resolu l'alerte lui-meme.
+        $currentlyAlertingIds = $units->pluck('id');
+        Alert::where('shop_id', $shop->id)
+            ->whereIn('type', ['stock_out', 'stock_low', 'stock_critical'])
+            ->where('is_resolved', false)
+            ->whereNotIn('product_unit_id', $currentlyAlertingIds)
+            ->update(['is_resolved' => true]);
+
         if ($units->count() > 0) {
             Log::info("CheckStockAlerts — Boutique {$shop->id} : {$units->count()} unités en alerte.");
         }

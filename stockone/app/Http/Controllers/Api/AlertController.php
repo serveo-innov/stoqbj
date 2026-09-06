@@ -32,7 +32,12 @@ class AlertController extends Controller
     {
         $shopId = $this->requireShopId($request);
 
+        // Les alertes resolues (is_resolved = true) ne sont plus affichees :
+        // une fois le probleme corrige (stock reapprovisionne, marge
+        // redevenue positive...), l'alerte disparait de la liste plutot
+        // que de rester indefiniment.
         $query = Alert::forShop($shopId)
+            ->where('is_resolved', false)
             ->with('productUnit.product')
             ->orderByDesc('triggered_at');
 
@@ -42,11 +47,11 @@ class AlertController extends Controller
         $alerts = $query->paginate(50);
 
         $counts = [
-            'total_unread'   => Alert::forShop($shopId)->unread()->count(),
-            'stock_alerts'   => Alert::forShop($shopId)->unread()->whereIn('type', ['stock_out', 'stock_low', 'stock_critical'])->count(),
-            'credit_alerts'  => Alert::forShop($shopId)->unread()->where('type', 'credit_overdue')->count(),
-            'dormant_alerts' => Alert::forShop($shopId)->unread()->where('type', 'like', 'dormant_%')->count(),
-            'sub_alerts'     => Alert::forShop($shopId)->unread()->where('type', 'subscription_expiry')->count(),
+            'total_unread'   => Alert::forShop($shopId)->where('is_resolved', false)->unread()->count(),
+            'stock_alerts'   => Alert::forShop($shopId)->where('is_resolved', false)->unread()->whereIn('type', ['stock_out', 'stock_low', 'stock_critical'])->count(),
+            'credit_alerts'  => Alert::forShop($shopId)->where('is_resolved', false)->unread()->where('type', 'credit_overdue')->count(),
+            'dormant_alerts' => Alert::forShop($shopId)->where('is_resolved', false)->unread()->where('type', 'like', 'dormant_%')->count(),
+            'sub_alerts'     => Alert::forShop($shopId)->where('is_resolved', false)->unread()->where('type', 'subscription_expiry')->count(),
         ];
 
         return response()->json(['counts' => $counts, 'data' => $alerts]);
@@ -129,13 +134,11 @@ class AlertController extends Controller
         $suggestion = PriceSuggestion::forShop($shopId)->where('status', 'pending')->findOrFail($id);
         $unit       = $suggestion->productUnit;
 
-        // Appliquer les nouveaux prix
         $unit->update([
             'price_wholesale' => $suggestion->suggested_price_wholesale,
             'price_extra'     => $suggestion->suggested_price_extra,
         ]);
 
-        // Historique
         \App\Models\PriceHistory::create([
             'product_unit_id'     => $unit->id,
             'changed_by'          => $request->user()->id,
@@ -170,7 +173,6 @@ class AlertController extends Controller
                 properties: [new OA\Property(property: 'reason', type: 'string')]
             )
         ),
-        tags: ['Alertes'],
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         responses: [new OA\Response(response: 200, description: 'Suggestion rejetee')]
     )]

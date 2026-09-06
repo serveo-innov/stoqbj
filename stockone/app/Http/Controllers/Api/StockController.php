@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Alert;
 use App\Models\ProductUnit;
 use App\Models\PriceHistory;
 use App\Models\StockMovement;
+use App\Services\AlertResolutionService;
 use App\Services\StockAdjustmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +42,7 @@ class StockController extends Controller
             new OA\Response(response: 404, description: 'Unite introuvable'),
         ]
     )]
-    public function entry(Request $request): JsonResponse
+    public function entry(Request $request, AlertResolutionService $alertResolver): JsonResponse
     {
         $shopId = $request->user()->shop_id;
 
@@ -61,6 +63,8 @@ class StockController extends Controller
         try {
             $result = $unit->applyStockDelta($validated['quantity'], allowNegative: true);
 
+            $marginInfo = null;
+
             if (isset($validated['unit_cost']) && (float) $validated['unit_cost'] !== (float) $unit->cost_price) {
                 PriceHistory::create([
                     'product_unit_id'     => $unit->id,
@@ -77,6 +81,54 @@ class StockController extends Controller
                     'notes'               => 'Mise a jour automatique du prix achat suite a une entree de stock.',
                 ]);
                 $unit->update(['cost_price' => $validated['unit_cost']]);
+
+                // Calcul immediat de l'impact sur les 3 marges (Gros/Detail/Extra)
+                // suite au changement de prix d'achat, pour affichage direct et
+                // alerte si le produit se retrouve vendu a perte sur au moins un prix.
+                $newCostPrice = (float) $validated['unit_cost'];
+                $margins = [
+                    'wholesale' => $newCostPrice > 0 ? round((($unit->price_wholesale - $newCostPrice) / $newCostPrice) * 100, 2) : null,
+                    'detail'    => $newCostPrice > 0 ? round((($unit->price_detail - $newCostPrice) / $newCostPrice) * 100, 2) : null,
+                    'extra'     => $newCostPrice > 0 ? round((($unit->price_extra - $newCostPrice) / $newCostPrice) * 100, 2) : null,
+                ];
+                $hasNegativeMargin = collect($margins)->filter(fn($m) => $m !== null && $m < 0)->isNotEmpty();
+
+                $marginInfo = [
+                    'wholesale_percent' => $margins['wholesale'],
+                    'detail_percent'    => $margins['detail'],
+                    'extra_percent'     => $margins['extra'],
+                    'has_negative'      => $hasNegativeMargin,
+                ];
+
+                if ($hasNegativeMargin) {
+                    // Deduplication sur 24h, meme logique que CheckStockAlertsJob
+                    $alreadyAlerted = Alert::where('shop_id', $shopId)
+                        ->where('product_unit_id', $unit->id)
+                        ->where('type', 'margin_negative')
+                        ->where('created_at', '>=', now()->subHours(24))
+                        ->exists();
+
+                    if (! $alreadyAlerted) {
+                        Alert::create([
+                            'shop_id'         => $shopId,
+                            'product_unit_id' => $unit->id,
+                            'type'            => 'margin_negative',
+                            'triggered_at'    => now(),
+                            'meta'            => [
+                                'product_name'      => $unit->product->name,
+                                'unit_label'        => $unit->label,
+                                'cost_price'        => $newCostPrice,
+                                'wholesale_percent' => $margins['wholesale'],
+                                'detail_percent'    => $margins['detail'],
+                                'extra_percent'     => $margins['extra'],
+                            ],
+                        ]);
+                    }
+                } else {
+                    // La marge est redevenue positive sur les 3 prix : on
+                    // resout toute alerte margin_negative encore ouverte.
+                    $alertResolver->resolveMarginAlerts($shopId, $unit);
+                }
             }
 
             StockMovement::create([
@@ -95,6 +147,9 @@ class StockController extends Controller
             ]);
 
             DB::commit();
+
+            $alertResolver->resolveStockAlerts($shopId, $unit->fresh());
+
             return response()->json([
                 'message'      => "{$validated['quantity']} {$unit->label}(s) ajoute(s) — stock unite de base : {$result['base_before']} -> {$result['base_after']}",
                 'stock_before' => $result['unit_before'],
@@ -103,6 +158,7 @@ class StockController extends Controller
                 'base_after'   => $result['base_after'],
                 'unit_label'   => $unit->label,
                 'unit'         => $unit->fresh(),
+                'margins'      => $marginInfo,
             ]);
 
         } catch (\Throwable $e) {
@@ -214,7 +270,7 @@ class StockController extends Controller
         $shopId = $request->user()->shop_id;
 
         $units = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId)->where('is_active', true))
-            ->where('level', 1) // seule l'unite de base est source de verite pour les alertes, evite les doublons/incoherences entre niveaux
+            ->where('level', 1)
             ->with('product.category', 'product.units')
             ->get()
             ->filter(fn($unit) => $unit->stock_qty <= $unit->stock_alert_threshold)

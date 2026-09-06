@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PriceHistory;
 use App\Models\Product;
 use App\Models\ProductUnit;
+use App\Services\AlertResolutionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -149,10 +150,6 @@ class ProductController extends Controller
                     $parentId = $createdUnits[$unitData['level'] - 1]->id;
                 }
 
-                // Le stock initial saisi n'est retenu QUE pour le niveau 1
-                // (unite de base) : c'est la seule colonne stock_qty jamais
-                // ecrite directement. Les niveaux 2/3 demarrent a 0 en base,
-                // leur stock affiche etant calcule depuis le niveau 1.
                 $initialStock = $unitData['level'] === 1 ? ($unitData['stock_qty'] ?? 0) : 0;
 
                 $unit = ProductUnit::create([
@@ -274,7 +271,7 @@ class ProductController extends Controller
         ),
         responses: [new OA\Response(response: 200, description: 'Prix mis a jour')]
     )]
-    public function updatePrice(Request $request, int $id, int $unitId): JsonResponse
+    public function updatePrice(Request $request, int $id, int $unitId, AlertResolutionService $alertResolver): JsonResponse
     {
         $product = Product::forShop($this->requireShopId($request))->findOrFail($id);
         $unit    = ProductUnit::where('product_id', $product->id)->findOrFail($unitId);
@@ -309,6 +306,11 @@ class ProductController extends Controller
             'price_extra'     => $validated['price_extra'] ?? $unit->price_extra,
             'cost_price'      => $validated['cost_price'] ?? $unit->cost_price,
         ]);
+
+        // Si la correction manuelle du prix a fait repasser toutes les
+        // marges au-dessus de zero, on resout l'alerte margin_negative
+        // encore ouverte pour cette unite.
+        $alertResolver->resolveMarginAlerts($this->requireShopId($request), $unit);
 
         return response()->json(['data' => $unit, 'message' => 'Prix mis a jour.']);
     }
