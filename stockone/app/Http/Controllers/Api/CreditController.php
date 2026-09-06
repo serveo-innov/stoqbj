@@ -83,6 +83,13 @@ class CreditController extends Controller
 
     /**
      * Enregistrer un paiement sur un crédit
+     *
+     * CORRECTIF (point 3) : la ligne credit_sales est désormais verrouillée
+     * (lockForUpdate) DANS la transaction, et le montant restant est relu
+     * après verrouillage avant validation. Ça empêche deux requêtes
+     * quasi simultanées (double-clic, double soumission réseau) de valider
+     * toutes les deux contre le même amount_remaining de départ et de
+     * faire passer amount_remaining sous zéro.
      */
     #[OA\Post(
         path: '/credits/{id}/payments',
@@ -108,33 +115,50 @@ class CreditController extends Controller
     )]
     public function addPayment(Request $request, int $id): JsonResponse
     {
-        $credit = CreditSale::forShop($this->requireShopId($request))->findOrFail($id);
-
-        if ($credit->status === 'paid') {
-            return response()->json(['message' => 'Ce credit est deja solde.'], 422);
-        }
-
-        $validated = $request->validate([
-            'amount'         => ['required', 'numeric', 'min:1', "max:{$credit->amount_remaining}"],
+        // Validation "légère" en amont uniquement pour les champs qui ne
+        // dépendent pas de l'état concurrent (payment_method, notes).
+        $request->validate([
+            'amount'         => ['required', 'numeric', 'min:1'],
             'payment_method' => ['required', 'in:cash,mobile_money,virement'],
             'notes'          => ['nullable', 'string'],
-        ], [
-            'amount.max' => "Le montant ne peut pas depasser le reste du ({$credit->amount_remaining} FCFA).",
         ]);
 
         DB::beginTransaction();
         try {
+            // Verrou de ligne : toute autre requête concurrente sur ce
+            // credit_sale attend ici que la transaction se termine.
+            $credit = CreditSale::forShop($this->requireShopId($request))
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            if ($credit->status === 'paid') {
+                DB::rollBack();
+                return response()->json(['message' => 'Ce credit est deja solde.'], 422);
+            }
+
+            $amount = (float) $request->input('amount');
+
+            // Revalidation du montant max APRES verrouillage, contre l'état
+            // réel et à jour de amount_remaining (et non celui lu avant le lock).
+            if ($amount > (float) $credit->amount_remaining) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => "Le montant ne peut pas depasser le reste du ({$credit->amount_remaining} FCFA).",
+                    'errors'  => ['amount' => ["Le montant ne peut pas depasser le reste du ({$credit->amount_remaining} FCFA)."]],
+                ], 422);
+            }
+
             CreditPayment::create([
                 'credit_sale_id' => $credit->id,
                 'received_by'    => $request->user()->id,
-                'amount'         => $validated['amount'],
-                'payment_method' => $validated['payment_method'],
-                'notes'          => $validated['notes'] ?? null,
+                'amount'         => $amount,
+                'payment_method' => $request->input('payment_method'),
+                'notes'          => $request->input('notes'),
                 'paid_at'        => now(),
             ]);
 
-            $newAmountPaid      = $credit->amount_paid + $validated['amount'];
-            $newAmountRemaining = $credit->amount_remaining - $validated['amount'];
+            $newAmountPaid      = $credit->amount_paid + $amount;
+            $newAmountRemaining = $credit->amount_remaining - $amount;
 
             $status = 'partial';
             if ($newAmountRemaining <= 0) {
@@ -151,8 +175,8 @@ class CreditController extends Controller
 
             // Mettre à jour la vente parente
             $credit->sale->update([
-                'amount_paid' => $credit->sale->amount_paid + $validated['amount'],
-                'amount_due'  => max(0, $credit->sale->amount_due - $validated['amount']),
+                'amount_paid' => $credit->sale->amount_paid + $amount,
+                'amount_due'  => max(0, $credit->sale->amount_due - $amount),
             ]);
 
             DB::commit();
@@ -195,6 +219,22 @@ class CreditController extends Controller
 
     /**
      * Prolonger la date d'échéance
+     *
+     * CORRECTIFS :
+     * (point 2) Un crédit "doubtful" est désormais exclu — il ne peut plus
+     * être prolongé tant qu'il n'a pas été traité autrement (paiement).
+     * Décision produit : option A (restrictive), à revoir si besoin d'un
+     * parcours de "réhabilitation" explicite plus tard.
+     *
+     * (point 1) Le nouveau statut est maintenant recalculé par rapport à la
+     * NOUVELLE échéance réelle (comparée à now()), et non plus uniquement
+     * par rapport à amount_paid. Avant : un crédit en retard prolongé de
+     * quelques jours insuffisants repassait à tort en "partial"/"pending"
+     * alors que la nouvelle échéance restait dans le passé — créant une
+     * incohérence entre le badge de statut, le texte "Xj de retard" affiché
+     * en dessous (calculé en direct depuis due_date), et le KPI "Montant en
+     * retard" (calculé lui aussi en direct depuis due_date, indépendamment
+     * du statut stocké).
      */
     #[OA\Post(
         path: '/credits/{id}/extend',
@@ -212,13 +252,22 @@ class CreditController extends Controller
         ),
         tags: ['Credits'],
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 200, description: 'Echeance prolongee')]
+        responses: [
+            new OA\Response(response: 200, description: 'Echeance prolongee'),
+            new OA\Response(response: 422, description: 'Credit douteux : prolongation refusee'),
+        ]
     )]
     public function extend(Request $request, int $id): JsonResponse
     {
         $credit = CreditSale::forShop($this->requireShopId($request))
             ->whereNotIn('status', ['paid'])
             ->findOrFail($id);
+
+        if ($credit->status === 'doubtful') {
+            return response()->json([
+                'message' => "Ce credit est marque comme creance douteuse : l'echeance ne peut pas etre prolongee tant qu'il n'a pas ete regularise par un paiement.",
+            ], 422);
+        }
 
         $validated = $request->validate([
             'days'  => ['required', 'integer', 'min:1', 'max:90'],
@@ -227,9 +276,19 @@ class CreditController extends Controller
 
         $newDueDate = $credit->due_date->addDays($validated['days']);
 
+        // Statut recalculé par rapport à la NOUVELLE échéance réelle,
+        // pas uniquement par rapport à amount_paid.
+        if ($newDueDate->isPast()) {
+            $status = 'overdue';
+        } elseif ($credit->amount_paid > 0) {
+            $status = 'partial';
+        } else {
+            $status = 'pending';
+        }
+
         $credit->update([
             'due_date' => $newDueDate,
-            'status'   => $credit->amount_paid > 0 ? 'partial' : 'pending',
+            'status'   => $status,
             'notes'    => $validated['notes'] ?? $credit->notes,
         ]);
 
