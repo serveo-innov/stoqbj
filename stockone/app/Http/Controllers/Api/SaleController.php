@@ -29,7 +29,7 @@ class SaleController extends Controller
             content: new OA\JsonContent(
                 required: ['items', 'payment_mode'],
                 properties: [
-                    new OA\Property(property: 'client_id',       type: 'integer', example: 1,       description: 'Optionnel'),
+                    new OA\Property(property: 'client_id',       type: 'integer', example: 1,       description: 'Optionnel sauf si un reste a payer existe'),
                     new OA\Property(property: 'payment_mode',    type: 'string',  enum: ['cash', 'credit', 'mobile_money', 'mixed'], example: 'cash'),
                     new OA\Property(property: 'amount_paid',     type: 'number',  example: 5000),
                     new OA\Property(property: 'discount_amount', type: 'number',  example: 0),
@@ -63,7 +63,7 @@ class SaleController extends Controller
         tags: ['Ventes'],
         responses: [
             new OA\Response(response: 201, description: 'Vente enregistrée'),
-            new OA\Response(response: 422, description: 'Stock insuffisant ou données invalides'),
+            new OA\Response(response: 422, description: 'Stock insuffisant, remise invalide, ou client requis pour un reste a payer'),
         ]
     )]
     public function store(Request $request): JsonResponse
@@ -89,31 +89,79 @@ class SaleController extends Controller
             'extra_identity.remarks' => ['nullable', 'string'],
         ]);
 
-        // Verifier stock disponible pour chaque item (stock_qty est deja
-        // le stock reel converti a ce niveau, quel que soit le niveau vendu)
-        foreach ($validated['items'] as $item) {
-            $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
-                ->findOrFail($item['product_unit_id']);
+        // Montants calcules en amont (avant transaction) pour pouvoir
+        // valider client/remise avant de toucher a la base.
+        $totalAmount    = collect($validated['items'])->sum(fn($i) => $i['unit_price'] * $i['quantity']);
 
-            if ($unit->stock_qty < $item['quantity']) {
-                return response()->json([
-                    'message' => "Stock insuffisant pour {$unit->label} ({$unit->product->name}). Stock : {$unit->stock_qty}, demandé : {$item['quantity']}.",
-                ], 422);
-            }
+        // CORRECTIF (point 3) : la remise ne peut plus depasser le total de
+        // la vente. Avant, net_amount pouvait devenir negatif en base alors
+        // que le frontend affichait toujours max(0, ...) a l'ecran, creant
+        // une incoherence entre ce que le caissier voit et ce qui est stocke.
+        $discountAmount = $validated['discount_amount'] ?? 0;
+        if ($discountAmount > $totalAmount) {
+            return response()->json([
+                'message' => "La remise ({$discountAmount} FCFA) ne peut pas depasser le total de la vente ({$totalAmount} FCFA).",
+                'errors'  => ['discount_amount' => ['La remise ne peut pas depasser le total de la vente.']],
+            ], 422);
         }
+
+        $netAmount  = $totalAmount - $discountAmount;
+        $amountPaid = $validated['amount_paid'] ?? ($validated['payment_mode'] === 'cash' ? $netAmount : 0);
+        $amountDue  = max(0, $netAmount - $amountPaid);
+
+        // CORRECTIFS (points 1 et 2) : des qu'un reste a payer existe, il
+        // FAUT un client identifiable (selectionne ou cree via l'identite
+        // Extra) — quel que soit le payment_mode declare. Avant, une vente
+        // "Mobile Money" avec un montant paye oublie (0 par defaut) ou une
+        // vente "Credit"/"Mixte" sans client cree un amount_due > 0 qui ne
+        // devenait JAMAIS un CreditSale : la dette existait sur la vente
+        // mais restait invisible partout ailleurs (jamais sur l'ecran
+        // Credits, jamais relancee, jamais encaissable).
+        $clientId = $validated['client_id'] ?? null;
+        if ($amountDue > 0 && ! $clientId && empty($validated['extra_identity'])) {
+            return response()->json([
+                'message' => "Un reste a payer de {$amountDue} FCFA existe sur cette vente : un client (ou une identite acheteur) est requis pour pouvoir suivre cette creance.",
+                'errors'  => ['client_id' => ["Client requis des qu'il reste un montant a payer."]],
+            ], 422);
+        }
+
+        // CORRECTIF (point 4) : verification de stock agregee par produit
+        // (deux lignes de panier du meme produit_unit_id — ex. une en
+        // "Gros", une en "Detail" — sont desormais additionnees avant
+        // comparaison au stock reel, au lieu d'etre verifiees separement).
+        $demandByUnit = collect($validated['items'])
+            ->groupBy('product_unit_id')
+            ->map(fn($rows) => collect($rows)->sum('quantity'));
 
         DB::beginTransaction();
         try {
-            $totalAmount    = collect($validated['items'])->sum(fn($i) => $i['unit_price'] * $i['quantity']);
-            $discountAmount = $validated['discount_amount'] ?? 0;
-            $netAmount      = $totalAmount - $discountAmount;
-            $amountPaid     = $validated['amount_paid'] ?? ($validated['payment_mode'] === 'cash' ? $netAmount : 0);
-            $amountDue      = max(0, $netAmount - $amountPaid);
+            // CORRECTIF (point 4, suite) : verrouillage des lignes produit
+            // concernees (lockForUpdate) DANS la transaction, pour eviter
+            // que deux ventes simultanees sur le meme produit ne passent
+            // toutes les deux le controle de stock avec la meme valeur de
+            // depart (meme risque de concurrence deja corrige sur le
+            // module Credit). Le controle bloquant se fait desormais ICI,
+            // sous verrou, sur la quantite reelle et a jour.
+            $lockedUnits = [];
+            foreach ($demandByUnit as $unitId => $qtyNeeded) {
+                $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
+                    ->lockForUpdate()
+                    ->findOrFail($unitId);
+
+                if ($unit->stock_qty < $qtyNeeded) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => "Stock insuffisant pour {$unit->label} ({$unit->product->name}). Stock : {$unit->stock_qty}, demandé : {$qtyNeeded}.",
+                    ], 422);
+                }
+
+                $lockedUnits[$unitId] = $unit;
+            }
 
             $sale = Sale::create([
                 'shop_id'         => $shopId,
                 'user_id'         => $user->id,
-                'client_id'       => $validated['client_id'] ?? null,
+                'client_id'       => $clientId,
                 'total_amount'    => $totalAmount,
                 'discount_amount' => $discountAmount,
                 'net_amount'      => $netAmount,
@@ -128,7 +176,7 @@ class SaleController extends Controller
             $sale->update(['invoice_number' => $sale->generateInvoiceNumber()]);
 
             foreach ($validated['items'] as $item) {
-                $unit = ProductUnit::find($item['product_unit_id']);
+                $unit = $lockedUnits[$item['product_unit_id']];
 
                 SaleItem::create([
                     'sale_id'         => $sale->id,
@@ -141,7 +189,14 @@ class SaleController extends Controller
 
                 // Deduire le stock : converti et applique sur l'unite de
                 // base, quel que soit le niveau vendu (Piece/Paquet/Carton).
-                $result = $unit->applyStockDelta(-$item['quantity'], allowNegative: true);
+                // CORRECTIF (point 4) : allowNegative desormais a false
+                // (comportement par defaut) — le stock ne peut plus passer
+                // sous zero suite a une vente. Le controle agrege ci-dessus
+                // rend ce cas normalement impossible ; ce false est un
+                // filet de securite qui declenche un rollback complet
+                // plutot qu'une vente partiellement enregistree si jamais
+                // le pre-controle etait contourne.
+                $result = $unit->applyStockDelta(-$item['quantity']);
                 $unit->update(['last_sold_at' => now()]);
 
                 StockMovement::create([
@@ -167,11 +222,16 @@ class SaleController extends Controller
                 ]);
             }
 
-            if ($amountDue > 0 && in_array($validated['payment_mode'], ['credit', 'mixed'])) {
+            // CORRECTIF (points 1 et 2) : la creance est desormais creee des
+            // que amount_due > 0 ET qu'un client est identifiable — quel
+            // que soit le payment_mode declare (avant : limite a
+            // ['credit','mixed'], ce qui laissait passer un amount_due > 0
+            // "orphelin" pour tout autre mode, ex. mobile_money sans
+            // montant saisi).
+            if ($amountDue > 0) {
                 $shop       = $user->shop ?? $sale->shop;
                 $creditDays = $shop->default_credit_days ?? 7;
 
-                $clientId = $validated['client_id'] ?? null;
                 if (! $clientId && ! empty($validated['extra_identity'])) {
                     $client = Client::firstOrCreate(
                         ['shop_id' => $shopId, 'phone' => $validated['extra_identity']['phone']],
@@ -184,19 +244,19 @@ class SaleController extends Controller
                     $sale->update(['client_id' => $clientId]);
                 }
 
-                if ($clientId) {
-                    CreditSale::create([
-                        'shop_id'          => $shopId,
-                        'sale_id'          => $sale->id,
-                        'client_id'        => $clientId,
-                        'amount_due'       => $netAmount,
-                        'amount_paid'      => $amountPaid,
-                        'amount_remaining' => $amountDue,
-                        'due_date'         => now()->addDays($creditDays),
-                        'credit_days'      => $creditDays,
-                        'status'           => $amountPaid > 0 ? 'partial' : 'pending',
-                    ]);
-                }
+                // $clientId est garanti non-null ici grace a la validation
+                // faite plus haut (avant le debut de la transaction).
+                CreditSale::create([
+                    'shop_id'          => $shopId,
+                    'sale_id'          => $sale->id,
+                    'client_id'        => $clientId,
+                    'amount_due'       => $netAmount,
+                    'amount_paid'      => $amountPaid,
+                    'amount_remaining' => $amountDue,
+                    'due_date'         => now()->addDays($creditDays),
+                    'credit_days'      => $creditDays,
+                    'status'           => $amountPaid > 0 ? 'partial' : 'pending',
+                ]);
             }
 
             DB::commit();
@@ -206,6 +266,12 @@ class SaleController extends Controller
                 'data'    => $sale->load(['items.productUnit.product', 'client', 'extraIdentity', 'creditSale']),
             ], 201);
 
+        } catch (\RuntimeException $e) {
+            // Filet de securite du point 4 (applyStockDelta refuse un
+            // stock negatif) : on renvoie une erreur 422 propre plutot
+            // qu'un 500 generique.
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
             throw $e;
@@ -330,7 +396,18 @@ class SaleController extends Controller
 
             $sale->update(['status' => 'cancelled']);
             if ($sale->creditSale) {
-                $sale->creditSale->update(['status' => 'paid']);
+                // CORRECTIF (point 5) : on remet aussi amount_remaining a 0
+                // en meme temps que le statut passe a "paid". Avant, seul
+                // le statut changeait : un credit jamais paye et annule
+                // affichait le badge "Solde" alors que sa fiche detail
+                // montrait encore un montant restant du non nul — incoherent.
+                // (amount_paid est deja garanti a 0 ici, cf. le blocage
+                // 409 ci-dessus qui empeche l'annulation d'un credit deja
+                // partiellement paye.)
+                $sale->creditSale->update([
+                    'status'           => 'paid',
+                    'amount_remaining' => 0,
+                ]);
             }
 
             DB::commit();
