@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../core/services/apiService';
 import { all_routes } from '../router/all_routes';
@@ -132,6 +132,13 @@ const Pos: React.FC = () => {
   const netAmount        = Math.max(0, totalAmount - discount);
   const hasExtra          = cart.some(i => i.sale_type === 'extra');
 
+  // CORRECTIFS (points 1 et 2, côté UX) : calcul du reste à payer en
+  // direct, utilisé pour avertir AVANT l'envoi plutôt que de laisser le
+  // caissier découvrir l'erreur seulement après la réponse du serveur.
+  const amountPaidNum = Number(amountPaid) || 0;
+  const amountDue      = Math.max(0, netAmount - amountPaidNum);
+  const needsClient    = amountDue > 0 && !hasExtra;
+
   useEffect(() => {
     if (paymentMode === 'cash') setAmountPaid(String(netAmount));
   }, [netAmount, paymentMode]);
@@ -158,7 +165,23 @@ const Pos: React.FC = () => {
       }
     }
     if (hasExtra && (!extraIdentity.name || !extraIdentity.firstname || !extraIdentity.phone)) {
-      setError('IdentitÃ© acheteur (nom, prÃ©nom, tÃ©lÃ©phone) requise pour une vente Extra.');
+      setError('Identité acheteur (nom, prénom, téléphone) requise pour une vente Extra.');
+      return;
+    }
+
+    // CORRECTIF (point 1) : un reste à payer sans client identifiable ne
+    // pourra jamais être suivi comme créance (le backend le refusera de
+    // toute façon désormais) — on bloque ici pour guider le caissier tôt.
+    if (needsClient && !selectedClient) {
+      setError(`Un reste à payer de ${fmt(amountDue)} existe sur cette vente : sélectionnez un client pour pouvoir suivre cette créance.`);
+      return;
+    }
+
+    // CORRECTIF (point 2) : en Mobile Money, un montant payé à 0 (oublié)
+    // créait auparavant une dette invisible, non trackée nulle part car
+    // le mode n'était pas "credit"/"mixed". On force la saisie explicite.
+    if (paymentMode === 'mobile_money' && amountPaidNum <= 0) {
+      setError('Indiquez le montant réellement reçu en Mobile Money avant de valider.');
       return;
     }
 
@@ -180,7 +203,7 @@ const Pos: React.FC = () => {
       if (hasExtra) payload.extra_identity = extraIdentity;
 
       const res = await api.post<{ data: any }>('/sales', payload);
-      setSuccess(`Vente enregistrÃ©e : ${res.data.invoice_number}`);
+      setSuccess(`Vente enregistrée : ${res.data.invoice_number}`);
       setLastSaleId(res.data.id);
       resetSale();
       loadProducts();
@@ -193,7 +216,7 @@ const Pos: React.FC = () => {
     }
   };
 
-  const saleTypeLabel = (t: string) => t === 'gros' ? 'Gros' : t === 'detail' ? 'DÃ©tail' : 'Extra';
+  const saleTypeLabel = (t: string) => t === 'gros' ? 'Gros' : t === 'detail' ? 'Détail' : 'Extra';
   const saleTypeColor = (t: string) => t === 'gros' ? '#7c3aed' : t === 'detail' ? '#0891b2' : '#F97316';
 
   return (
@@ -259,7 +282,7 @@ const Pos: React.FC = () => {
               {loadingProd ? (
                 <div className="text-center py-5"><div className="spinner-border" style={{color:'#F97316'}} role="status"/></div>
               ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-5"><p className="text-muted">Aucun produit trouvÃ©</p></div>
+                <div className="text-center py-5"><p className="text-muted">Aucun produit trouvé</p></div>
               ) : (
                 <div style={{maxHeight:560, overflowY:'auto'}}>
                   {filteredProducts.map(p => (
@@ -278,19 +301,19 @@ const Pos: React.FC = () => {
                             </span>
                             <button className="btn btn-sm" disabled={u.stock_qty <= 0}
                               onClick={() => addToCart(p, u, 'gros')}
-                              title={`Ajouter (Gros â€” ${fmt(Number(u.price_wholesale))})`}
+                              title={`Ajouter (Gros — ${fmt(Number(u.price_wholesale))})`}
                               style={{background:'#f5f3ff',color:'#7c3aed',border:'none',borderRadius:4,fontSize:10,padding:'2px 6px'}}>
                               G
                             </button>
                             <button className="btn btn-sm" disabled={u.stock_qty <= 0}
                               onClick={() => addToCart(p, u, 'detail')}
-                              title={`Ajouter (DÃ©tail â€” ${fmt(Number(u.price_detail))})`}
+                              title={`Ajouter (Détail — ${fmt(Number(u.price_detail))})`}
                               style={{background:'#ecfeff',color:'#0891b2',border:'none',borderRadius:4,fontSize:10,padding:'2px 6px'}}>
                               D
                             </button>
                             <button className="btn btn-sm" disabled={u.stock_qty <= 0}
                               onClick={() => addToCart(p, u, 'extra')}
-                              title={`Ajouter (Extra â€” ${fmt(Number(u.price_extra))})`}
+                              title={`Ajouter (Extra — ${fmt(Number(u.price_extra))})`}
                               style={{background:'#fff7ed',color:'#F97316',border:'none',borderRadius:4,fontSize:10,padding:'2px 6px'}}>
                               E
                             </button>
@@ -335,7 +358,7 @@ const Pos: React.FC = () => {
                           <input type="number" min={1} max={item.stock_qty} value={item.quantity}
                             onChange={e => updateCartItem(item.key, { quantity: Math.max(1, Number(e.target.value)) })}
                             style={{width:50,fontSize:12,padding:'2px 4px',borderRadius:6,border:'1px solid #e5e7eb'}}/>
-                          <span className="fs-11">Ã—</span>
+                          <span className="fs-11">×</span>
                           <input type="number" min={0} value={item.unit_price}
                             onChange={e => updateCartItem(item.key, { unit_price: Number(e.target.value) })}
                             style={{width:80,fontSize:12,padding:'2px 4px',borderRadius:6,border:'1px solid #e5e7eb'}}/>
@@ -353,18 +376,18 @@ const Pos: React.FC = () => {
 
               {hasExtra && (
                 <div className="p-2 mt-2 rounded-3" style={{background:'#fff7ed',border:'1px solid #FED7AA'}}>
-                  <div className="fs-11 fw-600 mb-2" style={{color:'#F97316'}}>IdentitÃ© acheteur Extra (requis)</div>
+                  <div className="fs-11 fw-600 mb-2" style={{color:'#F97316'}}>Identité acheteur Extra (requis)</div>
                   <div className="row g-1 mb-1">
                     <div className="col-6">
                       <input className="form-control form-control-sm" placeholder="Nom"
                         value={extraIdentity.name} onChange={e => setExtraIdentity(f=>({...f,name:e.target.value}))}/>
                     </div>
                     <div className="col-6">
-                      <input className="form-control form-control-sm" placeholder="PrÃ©nom"
+                      <input className="form-control form-control-sm" placeholder="Prénom"
                         value={extraIdentity.firstname} onChange={e => setExtraIdentity(f=>({...f,firstname:e.target.value}))}/>
                     </div>
                   </div>
-                  <input className="form-control form-control-sm" placeholder="TÃ©lÃ©phone"
+                  <input className="form-control form-control-sm" placeholder="Téléphone"
                     value={extraIdentity.phone} onChange={e => setExtraIdentity(f=>({...f,phone:e.target.value}))}/>
                 </div>
               )}
@@ -374,11 +397,15 @@ const Pos: React.FC = () => {
           {/* Client */}
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body">
-              <h6 className="fw-700 mb-2 fs-13">Client (optionnel)</h6>
+              <h6 className="fw-700 mb-2 fs-13">
+                Client {needsClient
+                  ? <span style={{color:'#dc2626'}}>(requis — reste à payer de {fmt(amountDue)})</span>
+                  : <span className="text-muted fw-400">(optionnel)</span>}
+              </h6>
               {selectedClient ? (
                 <div className="d-flex align-items-center gap-2 p-2 rounded-3" style={{background:'#fff7ed'}}>
                   <i className="ti ti-user" style={{color:'#F97316'}}/>
-                  <span className="fs-13">{selectedClient.firstname} {selectedClient.name} â€” {selectedClient.phone}</span>
+                  <span className="fs-13">{selectedClient.firstname} {selectedClient.name} — {selectedClient.phone}</span>
                   <button className="btn btn-sm ms-auto" onClick={() => setSelectedClient(null)}
                     style={{background:'transparent',border:'none',fontSize:12}}>
                     <i className="ti ti-x"/>
@@ -388,13 +415,13 @@ const Pos: React.FC = () => {
                 <div className="position-relative">
                   <input type="text" className="form-control form-control-sm" placeholder="Rechercher un client..."
                     value={clientSearch} onChange={e => searchClients(e.target.value)}
-                    style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    style={{borderColor: needsClient ? '#fca5a5' : '#e5e7eb', borderRadius:8}}/>
                   {clientResults.length > 0 && (
                     <div className="position-absolute w-100 mt-1" style={{background:'#fff',border:'1px solid #e5e7eb',borderRadius:8,zIndex:10,maxHeight:150,overflowY:'auto'}}>
                       {clientResults.map(c => (
                         <div key={c.id} className="p-2 fs-13" style={{cursor:'pointer'}}
                           onClick={() => { setSelectedClient(c); setClientResults([]); setClientSearch(''); }}>
-                          {c.firstname} {c.name} â€” {c.phone}
+                          {c.firstname} {c.name} — {c.phone}
                         </div>
                       ))}
                     </div>
@@ -412,24 +439,26 @@ const Pos: React.FC = () => {
                 <select className="form-select form-select-sm" value={paymentMode}
                   onChange={e => setPaymentMode(e.target.value as PaymentMode)}
                   style={{borderColor:'#e5e7eb',borderRadius:8}}>
-                  <option value="cash">EspÃ¨ces</option>
+                  <option value="cash">Espèces</option>
                   <option value="mobile_money">Mobile Money</option>
-                  <option value="credit">CrÃ©dit</option>
-                  <option value="mixed">Mixte (partiel + crÃ©dit)</option>
+                  <option value="credit">Crédit</option>
+                  <option value="mixed">Mixte (partiel + crédit)</option>
                 </select>
               </div>
               <div className="row g-2 mb-2">
                 <div className="col-6">
                   <label className="fs-11 text-muted">Remise</label>
-                  <input type="number" className="form-control form-control-sm" min={0} value={discountAmount}
+                  <input type="number" className="form-control form-control-sm" min={0} max={totalAmount} value={discountAmount}
                     onChange={e => setDiscountAmount(e.target.value)} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                 </div>
                 <div className="col-6">
-                  <label className="fs-11 text-muted">Montant payÃ©</label>
+                  <label className="fs-11 text-muted">
+                    Montant payé {paymentMode === 'mobile_money' && <span style={{color:'#dc2626'}}>*</span>}
+                  </label>
                   <input type="number" className="form-control form-control-sm" min={0} value={amountPaid}
                     onChange={e => setAmountPaid(e.target.value)}
                     disabled={paymentMode === 'cash'}
-                    style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    style={{borderColor: (paymentMode === 'mobile_money' && amountPaidNum <= 0) ? '#fca5a5' : '#e5e7eb', borderRadius:8}}/>
                 </div>
               </div>
               <textarea className="form-control form-control-sm mb-3" rows={1} placeholder="Notes (optionnel)"
@@ -443,8 +472,13 @@ const Pos: React.FC = () => {
                   <span>Remise</span><span>-{fmt(discount)}</span>
                 </div>
                 <div className="d-flex justify-content-between fw-700 fs-15 pt-1 mt-1" style={{borderTop:'1px solid #e5e7eb'}}>
-                  <span>Net Ã  payer</span><span style={{color:'#F97316'}}>{fmt(netAmount)}</span>
+                  <span>Net à payer</span><span style={{color:'#F97316'}}>{fmt(netAmount)}</span>
                 </div>
+                {amountDue > 0 && (
+                  <div className="d-flex justify-content-between fs-12 mt-1" style={{color:'#dc2626'}}>
+                    <span>Reste à payer</span><span>{fmt(amountDue)}</span>
+                  </div>
+                )}
               </div>
 
               <button className="btn w-100" disabled={submitting || cart.length === 0} onClick={handleSubmit}
