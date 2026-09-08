@@ -42,7 +42,7 @@ class CreditController extends Controller
 
         if ($request->filled('status'))    $query->where('status', $request->status);
         if ($request->filled('client_id')) $query->where('client_id', $request->client_id);
-        if ($request->boolean('overdue'))  $query->where('due_date', '<', now())->whereNotIn('status', ['paid']);
+        if ($request->boolean('overdue'))  $query->where('due_date', '<', now())->whereNotIn('status', ['paid', 'cancelled']);
         if ($request->filled('from'))      $query->whereDate('created_at', '>=', $request->from);
         if ($request->filled('to'))        $query->whereDate('created_at', '<=', $request->to);
 
@@ -50,9 +50,9 @@ class CreditController extends Controller
 
         // Statistiques globales
         $stats = [
-            'total_due'       => CreditSale::forShop($shopId)->whereNotIn('status', ['paid'])->sum('amount_remaining'),
-            'total_overdue'   => CreditSale::forShop($shopId)->where('due_date', '<', now())->whereNotIn('status', ['paid'])->sum('amount_remaining'),
-            'nb_debtors'      => CreditSale::forShop($shopId)->whereNotIn('status', ['paid'])->distinct('client_id')->count('client_id'),
+            'total_due'       => CreditSale::forShop($shopId)->whereNotIn('status', ['paid', 'cancelled'])->sum('amount_remaining'),
+            'total_overdue'   => CreditSale::forShop($shopId)->where('due_date', '<', now())->whereNotIn('status', ['paid', 'cancelled'])->sum('amount_remaining'),
+            'nb_debtors'      => CreditSale::forShop($shopId)->whereNotIn('status', ['paid', 'cancelled'])->distinct('client_id')->count('client_id'),
         ];
 
         return response()->json([
@@ -131,9 +131,9 @@ class CreditController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($id);
 
-            if ($credit->status === 'paid') {
+            if (in_array($credit->status, ['paid', 'cancelled'])) {
                 DB::rollBack();
-                return response()->json(['message' => 'Ce credit est deja solde.'], 422);
+                return response()->json(['message' => 'Ce credit est deja solde ou annule.'], 422);
             }
 
             $amount = (float) $request->input('amount');
@@ -209,7 +209,7 @@ class CreditController extends Controller
     public function markDoubtful(Request $request, int $id): JsonResponse
     {
         $credit = CreditSale::forShop($this->requireShopId($request))
-            ->whereNotIn('status', ['paid'])
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->findOrFail($id);
 
         $credit->update(['status' => 'doubtful']);
@@ -260,7 +260,7 @@ class CreditController extends Controller
     public function extend(Request $request, int $id): JsonResponse
     {
         $credit = CreditSale::forShop($this->requireShopId($request))
-            ->whereNotIn('status', ['paid'])
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->findOrFail($id);
 
         if ($credit->status === 'doubtful') {
@@ -314,7 +314,7 @@ class CreditController extends Controller
         $shopId = $this->requireShopId($request);
 
         $debtors = CreditSale::forShop($shopId)
-            ->whereNotIn('status', ['paid'])
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->with('client')
             ->get()
             ->groupBy('client_id')

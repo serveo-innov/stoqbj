@@ -59,7 +59,7 @@ class Client extends Model
     public function getTotalDebtAttribute(): float
     {
         return $this->creditSales()
-            ->whereNotIn('status', ['paid'])
+            ->whereNotIn('status', ['paid', 'cancelled'])
             ->sum('amount_remaining');
     }
 

@@ -472,16 +472,18 @@ class SaleController extends Controller
 
             $sale->update(['status' => 'cancelled']);
             if ($sale->creditSale) {
-                // CORRECTIF (point 5) : on remet aussi amount_remaining a 0
-                // en meme temps que le statut passe a "paid". Avant, seul
-                // le statut changeait : un credit jamais paye et annule
-                // affichait le badge "Solde" alors que sa fiche detail
-                // montrait encore un montant restant du non nul — incoherent.
-                // (amount_paid est deja garanti a 0 ici, cf. le blocage
-                // 409 ci-dessus qui empeche l'annulation d'un credit deja
-                // partiellement paye.)
+                // CORRECTIF (point 5, revu) : statut dedie "cancelled" au
+                // lieu de reutiliser "paid" — un credit annule n'est pas
+                // "regle", c'est un etat different. amount_due (montant
+                // initial) reste volontairement inchange : c'est un fait
+                // historique reel (la vente valait bien ce montant a
+                // l'origine), on ne l'efface pas. amount_remaining passe a
+                // 0 puisqu'il n'y a plus rien a recouvrer sur une vente
+                // annulee. (amount_paid est deja garanti a 0 ici, cf. le
+                // blocage 409 ci-dessus qui empeche l'annulation d'un
+                // credit deja partiellement paye.)
                 $sale->creditSale->update([
-                    'status'           => 'paid',
+                    'status'           => 'cancelled',
                     'amount_remaining' => 0,
                 ]);
             }
