@@ -27,7 +27,7 @@ interface CreditDetail {
   amount_remaining: string;
   due_date: string;
   credit_days: number;
-  status: 'pending' | 'partial' | 'paid' | 'overdue' | 'doubtful';
+  status: 'pending' | 'partial' | 'paid' | 'overdue' | 'doubtful' | 'cancelled';
   notes: string | null;
   client: { id: number; name: string; firstname: string; phone: string; address: string | null };
   sale: { invoice_number: string; sold_at: string; items: SaleItem[] };
@@ -35,11 +35,12 @@ interface CreditDetail {
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending:  { label:'En attente',  color:'#0891b2', bg:'#ecfeff' },
-  partial:  { label:'Partiel',     color:'#d97706', bg:'#fffbeb' },
-  paid:     { label:'Soldé',       color:'#16a34a', bg:'#f0fdf4' },
-  overdue:  { label:'En retard',   color:'#dc2626', bg:'#fef2f2' },
-  doubtful: { label:'Douteux',     color:'#7c3aed', bg:'#f5f3ff' },
+  pending:   { label:'En attente',  color:'#0891b2', bg:'#ecfeff' },
+  partial:   { label:'Partiel',     color:'#d97706', bg:'#fffbeb' },
+  paid:      { label:'Soldé',       color:'#16a34a', bg:'#f0fdf4' },
+  overdue:   { label:'En retard',   color:'#dc2626', bg:'#fef2f2' },
+  doubtful:  { label:'Douteux',     color:'#7c3aed', bg:'#f5f3ff' },
+  cancelled: { label:'Annulé',      color:'#6b7280', bg:'#f3f4f6' },
 };
 
 const paymentMethodLabels: Record<string, string> = {
@@ -304,7 +305,7 @@ const CreditDetailPage: React.FC = () => {
             <div className="card-body">
               <h6 className="fw-700 mb-2 fs-13">Échéance</h6>
               <div className="fs-14 fw-600">{fmtDate(credit.due_date)}</div>
-              {overdue > 0 && credit.status !== 'paid' && (
+              {overdue > 0 && credit.status !== 'paid' && credit.status !== 'cancelled' && (
                 <div className="fs-13 mt-1" style={{color:'#dc2626'}}>{overdue} jour{overdue > 1 ? 's' : ''} de retard</div>
               )}
               <div className="fs-12 text-muted mt-1">Délai initial : {credit.credit_days} jours</div>
@@ -313,7 +314,7 @@ const CreditDetailPage: React.FC = () => {
           </div>
 
           {/* Actions */}
-          {credit.status !== 'paid' && (
+          {credit.status !== 'paid' && credit.status !== 'cancelled' && (
             <div className="card border-0 shadow-sm">
               <div className="card-body d-flex flex-column gap-2">
                 <button className="btn" onClick={() => setShowPay(true)}

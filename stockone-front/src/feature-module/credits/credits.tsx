@@ -10,7 +10,7 @@ interface Credit {
   amount_remaining: string;
   due_date: string;
   credit_days: number;
-  status: 'pending' | 'partial' | 'paid' | 'overdue' | 'doubtful';
+  status: 'pending' | 'partial' | 'paid' | 'overdue' | 'doubtful' | 'cancelled';
   notes: string | null;
   client: { id: number; name: string; firstname: string; phone: string };
   sale: { invoice_number: string; sold_at: string };
@@ -24,11 +24,14 @@ interface Stats {
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending:  { label:'En attente',  color:'#0891b2', bg:'#ecfeff' },
-  partial:  { label:'Partiel',     color:'#d97706', bg:'#fffbeb' },
-  paid:     { label:'Soldé',       color:'#16a34a', bg:'#f0fdf4' },
-  overdue:  { label:'En retard',   color:'#dc2626', bg:'#fef2f2' },
-  doubtful: { label:'Douteux',     color:'#7c3aed', bg:'#f5f3ff' },
+  pending:   { label:'En attente',  color:'#0891b2', bg:'#ecfeff' },
+  partial:   { label:'Partiel',     color:'#d97706', bg:'#fffbeb' },
+  paid:      { label:'Soldé',       color:'#16a34a', bg:'#f0fdf4' },
+  overdue:   { label:'En retard',   color:'#dc2626', bg:'#fef2f2' },
+  doubtful:  { label:'Douteux',     color:'#7c3aed', bg:'#f5f3ff' },
+  // CORRECTIF (Test 3 - annulation) : statut distinct de "paid", pour ne
+  // plus confondre "vraiment réglé" et "annulé car vente retournée".
+  cancelled: { label:'Annulé',      color:'#6b7280', bg:'#f3f4f6' },
 };
 
 const fmt = (n: string | number) =>
@@ -240,7 +243,7 @@ const Credits: React.FC = () => {
                               onClick={() => navigate(all_routes.creditDetail.replace(':id', String(c.id)))}>
                               <i className="ti ti-eye"/>
                             </button>
-                            {c.status !== 'paid' && (
+                            {c.status !== 'paid' && c.status !== 'cancelled' && (
                               <button className="btn btn-sm"
                                 style={{background:'#F97316',color:'#fff',borderRadius:6,fontSize:12,border:'none'}}
                                 onClick={() => { setSelected(c); setPayForm({amount:'',payment_method:'cash',notes:''}); }}>
