@@ -169,6 +169,16 @@ const Pos: React.FC = () => {
       return;
     }
 
+    // CORRECTIF (point 3, complément) : le "max" HTML sur le champ Remise
+    // est purement cosmétique ici (pas de vrai submit de <form>), donc il
+    // ne bloque pas une saisie manuelle supérieure au total. On le fait
+    // explicitement avant l'envoi, en plus du blocage déjà présent côté
+    // backend (422), pour avertir le caissier avant qu'il ne valide.
+    if (discount > totalAmount) {
+      setError(`La remise (${fmt(discount)}) ne peut pas dépasser le total du panier (${fmt(totalAmount)}).`);
+      return;
+    }
+
     // CORRECTIF (point 1) : un reste à payer sans client identifiable ne
     // pourra jamais être suivi comme créance (le backend le refusera de
     // toute façon désormais) — on bloque ici pour guider le caissier tôt.
@@ -449,7 +459,11 @@ const Pos: React.FC = () => {
                 <div className="col-6">
                   <label className="fs-11 text-muted">Remise</label>
                   <input type="number" className="form-control form-control-sm" min={0} max={totalAmount} value={discountAmount}
-                    onChange={e => setDiscountAmount(e.target.value)} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    onChange={e => setDiscountAmount(e.target.value)}
+                    style={{borderColor: discount > totalAmount ? '#fca5a5' : '#e5e7eb', borderRadius:8}}/>
+                  {discount > totalAmount && (
+                    <div className="fs-10 mt-1" style={{color:'#dc2626'}}>Dépasse le total ({fmt(totalAmount)})</div>
+                  )}
                 </div>
                 <div className="col-6">
                   <label className="fs-11 text-muted">
