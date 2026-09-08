@@ -233,6 +233,15 @@ const Pos: React.FC = () => {
       return;
     }
 
+    // CORRECTIF (montant payé > net à payer) : rien n'empêchait de taper
+    // un montant supérieur au net à payer en Mobile Money/Crédit/Mixte
+    // (le mode Espèces est déjà verrouillé automatiquement sur le net à
+    // payer, donc non concerné ici).
+    if (amountPaidNum > netAmount) {
+      setError(`Le montant payé (${fmt(amountPaidNum)}) ne peut pas dépasser le net à payer (${fmt(netAmount)}).`);
+      return;
+    }
+
     // CORRECTIF (point 1) : un reste à payer sans client identifiable ne
     // pourra jamais être suivi comme créance (le backend le refusera de
     // toute façon désormais) — on bloque ici pour guider le caissier tôt.
@@ -557,10 +566,13 @@ const Pos: React.FC = () => {
                   <label className="fs-11 text-muted">
                     Montant payé {paymentMode === 'mobile_money' && <span style={{color:'#dc2626'}}>*</span>}
                   </label>
-                  <input type="number" className="form-control form-control-sm" min={0} value={amountPaid}
+                  <input type="number" className="form-control form-control-sm" min={0} max={netAmount} value={amountPaid}
                     onChange={e => setAmountPaid(e.target.value)}
                     disabled={paymentMode === 'cash'}
-                    style={{borderColor: (paymentMode === 'mobile_money' && amountPaidNum <= 0) ? '#fca5a5' : '#e5e7eb', borderRadius:8}}/>
+                    style={{borderColor: (amountPaidNum > netAmount || (paymentMode === 'mobile_money' && amountPaidNum <= 0)) ? '#fca5a5' : '#e5e7eb', borderRadius:8}}/>
+                  {amountPaidNum > netAmount && (
+                    <div className="fs-10 mt-1" style={{color:'#dc2626'}}>Dépasse le net à payer ({fmt(netAmount)})</div>
+                  )}
                 </div>
               </div>
               <textarea className="form-control form-control-sm mb-3" rows={1} placeholder="Notes (optionnel)"
