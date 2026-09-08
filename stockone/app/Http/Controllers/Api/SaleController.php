@@ -143,43 +143,80 @@ class SaleController extends Controller
             ], 422);
         }
 
-        // CORRECTIF (point 4) : verification de stock agregee par produit
-        // (deux lignes de panier du meme produit_unit_id — ex. une en
-        // "Gros", une en "Detail" — sont desormais additionnees avant
-        // comparaison au stock reel, au lieu d'etre verifiees separement).
-        $demandByUnit = collect($validated['items'])
-            ->groupBy('product_unit_id')
-            ->map(fn($rows) => collect($rows)->sum('quantity'));
+        // CORRECTIF (survente multi-niveaux Piece/Paquet/Carton) : le stock
+        // reel n'existe JAMAIS qu'au niveau de l'unite de base (cf.
+        // ProductUnit::applyStockDelta/stockQty). L'ancien controle agregait
+        // la demande par product_unit_id exact (le niveau vendu), pas par
+        // unite de base — deux lignes de panier vendant des NIVEAUX
+        // DIFFERENTS du meme produit (ex. 2 Cartons + 5 Paquets) passaient
+        // chacune le controle independamment contre le stock total, sans
+        // jamais additionner leur consommation reelle du meme stock
+        // partage. Resultat possible : survente au-dela du stock physique,
+        // meme en une seule transaction, sans concurrence necessaire.
+        // On resout maintenant chaque ligne vers son unite de BASE et on
+        // agrege/verrouille a ce niveau-la.
+        $soldUnitIds = collect($validated['items'])->pluck('product_unit_id')->unique();
+        $soldUnits   = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
+            ->whereIn('id', $soldUnitIds)
+            ->with('product')
+            ->get()
+            ->keyBy('id');
+
+        if ($soldUnits->count() !== $soldUnitIds->count()) {
+            return response()->json(['message' => 'Un ou plusieurs produits sont introuvables.'], 422);
+        }
+
+        $baseDemand = [];  // [base_unit_id => quantite requise en unite de base]
+        $baseLabel  = [];  // [base_unit_id => libelle pour message d'erreur]
+        foreach ($validated['items'] as $item) {
+            $unit   = $soldUnits[$item['product_unit_id']];
+            $base   = $unit->baseUnit() ?? $unit;
+            $factor = $unit->cumulativeQtyToBase();
+
+            $baseDemand[$base->id] = ($baseDemand[$base->id] ?? 0) + ($item['quantity'] * $factor);
+            $baseLabel[$base->id]  = "{$unit->product->name} ({$base->label})";
+        }
 
         DB::beginTransaction();
         try {
-            // CORRECTIF (point 4, suite) : verrouillage des lignes produit
-            // concernees (lockForUpdate) DANS la transaction, pour eviter
-            // que deux ventes simultanees sur le meme produit ne passent
-            // toutes les deux le controle de stock avec la meme valeur de
-            // depart (meme risque de concurrence deja corrige sur le
-            // module Credit). Le controle bloquant se fait desormais ICI,
-            // sous verrou, sur la quantite reelle et a jour.
-            $lockedUnits = [];
-            foreach ($demandByUnit as $unitId => $qtyNeeded) {
-                $unit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
+            // Verrouillage (lockForUpdate) sur l'unite de BASE de chaque
+            // produit concerne — et non plus sur l'unite vendue — pour que
+            // deux ventes simultanees touchant des niveaux differents du
+            // meme produit (une en Carton, une en Paquet) se serialisent
+            // correctement sur la ressource reellement partagee.
+            foreach ($baseDemand as $baseId => $qtyNeededBase) {
+                $baseUnit = ProductUnit::whereHas('product', fn($q) => $q->where('shop_id', $shopId))
                     ->lockForUpdate()
-                    ->findOrFail($unitId);
+                    ->findOrFail($baseId);
 
-                if ($unit->stock_qty < $qtyNeeded) {
+                $available = (int) $baseUnit->getRawOriginal('stock_qty');
+                if ($available < $qtyNeededBase) {
                     DB::rollBack();
                     return response()->json([
-                        'message' => "Stock insuffisant pour {$unit->label} ({$unit->product->name}). Stock : {$unit->stock_qty}, demandé : {$qtyNeeded}.",
+                        'message' => "Stock insuffisant pour {$baseLabel[$baseId]}. Stock disponible : {$available}, demandé (converti en {$baseUnit->label}) : {$qtyNeededBase}.",
                     ], 422);
                 }
-
-                $lockedUnits[$unitId] = $unit;
             }
+
+            // CORRECTIF (numeros de facture dupliques) : l'ancienne
+            // generation (Sale::generateInvoiceNumber) faisait un simple
+            // COUNT() sans verrou, execute APRES la creation de la vente.
+            // Deux ventes concurrentes pouvaient lire le meme compte avant
+            // que l'une des deux ne valide, et se voir attribuer le MEME
+            // numero de facture (aucune contrainte unique n'existait non
+            // plus en base pour l'empecher). Le compte est desormais fait
+            // sous verrou (lockForUpdate), AVANT la creation de la vente,
+            // dans la meme transaction — ce qui serialise correctement la
+            // numerotation entre ventes concurrentes.
+            $invoiceYear  = now()->format('Y');
+            $invoiceCount = Sale::forShop($shopId)->whereYear('sold_at', $invoiceYear)->lockForUpdate()->count();
+            $invoiceNumber = "FAC-{$invoiceYear}-" . str_pad($invoiceCount + 1, 5, '0', STR_PAD_LEFT);
 
             $sale = Sale::create([
                 'shop_id'         => $shopId,
                 'user_id'         => $user->id,
                 'client_id'       => $clientId,
+                'invoice_number'  => $invoiceNumber,
                 'total_amount'    => $totalAmount,
                 'discount_amount' => $discountAmount,
                 'net_amount'      => $netAmount,
@@ -191,10 +228,8 @@ class SaleController extends Controller
                 'sold_at'         => now(),
             ]);
 
-            $sale->update(['invoice_number' => $sale->generateInvoiceNumber()]);
-
             foreach ($validated['items'] as $item) {
-                $unit = $lockedUnits[$item['product_unit_id']];
+                $unit = $soldUnits[$item['product_unit_id']];
 
                 SaleItem::create([
                     'sale_id'         => $sale->id,
@@ -251,13 +286,23 @@ class SaleController extends Controller
                 $creditDays = $shop->default_credit_days ?? 7;
 
                 if (! $clientId && ! empty($validated['extra_identity'])) {
-                    $client = Client::firstOrCreate(
-                        ['shop_id' => $shopId, 'phone' => $validated['extra_identity']['phone']],
-                        [
+                    // CORRECTIF (doublons clients par telephone) : on
+                    // cherche d'abord un client existant par telephone
+                    // normalise (cf. Client::normalizePhone) avant d'en
+                    // creer un nouveau — l'ancien firstOrCreate() exigeait
+                    // une egalite EXACTE sur le telephone brut, ce qui
+                    // creait une fiche client distincte a chaque variation
+                    // de format (+229..., 229..., ou juste le numero local)
+                    // pour la meme personne.
+                    $client = Client::findByNormalizedPhone($shopId, $validated['extra_identity']['phone']);
+                    if (! $client) {
+                        $client = Client::create([
+                            'shop_id'   => $shopId,
+                            'phone'     => $validated['extra_identity']['phone'],
                             'name'      => $validated['extra_identity']['name'],
                             'firstname' => $validated['extra_identity']['firstname'],
-                        ]
-                    );
+                        ]);
+                    }
                     $clientId = $client->id;
                     $sale->update(['client_id' => $clientId]);
                 }
@@ -284,6 +329,19 @@ class SaleController extends Controller
                 'data'    => $sale->load(['items.productUnit.product', 'client', 'extraIdentity', 'creditSale']),
             ], 201);
 
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Filet de securite (defense en profondeur) pour le correctif
+            // "numeros de facture dupliques" : si jamais une collision
+            // survient malgre le verrou (ex. contrainte unique ajoutee en
+            // base et violee dans un scenario imprevu), on renvoie un
+            // message clair invitant a reessayer plutot qu'un 500 brut.
+            DB::rollBack();
+            if (str_contains($e->getMessage(), 'invoice_number')) {
+                return response()->json([
+                    'message' => "Conflit de numerotation de facture, veuillez reessayer.",
+                ], 409);
+            }
+            throw $e;
         } catch (\RuntimeException $e) {
             // Filet de securite du point 4 (applyStockDelta refuse un
             // stock negatif) : on renvoie une erreur 422 propre plutot

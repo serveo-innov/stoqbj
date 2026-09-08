@@ -73,6 +73,20 @@ class ClientController extends Controller
             'is_extra_buyer' => ['sometimes', 'boolean'],
         ]);
 
+        // CORRECTIF (doublons clients par telephone) : avant de creer, on
+        // cherche un client existant dont le telephone correspond une fois
+        // normalise (cf. Client::normalizePhone) — evite qu'un meme numero
+        // saisi sous un format different ("+22990000001" vs "90000001")
+        // ne cree une deuxieme fiche pour la meme personne, ce qui
+        // eclaterait sa dette/son historique entre plusieurs clients.
+        $existing = Client::findByNormalizedPhone($shopId, $validated['phone']);
+        if ($existing) {
+            return response()->json([
+                'data'    => $existing,
+                'message' => 'Un client avec ce numero de telephone existe deja, il a ete selectionne.',
+            ], 200);
+        }
+
         $client = Client::create([...$validated, 'shop_id' => $shopId]);
 
         return response()->json(['data' => $client, 'message' => 'Client créé.'], 201);
