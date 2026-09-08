@@ -107,6 +107,24 @@ class SaleController extends Controller
 
         $netAmount  = $totalAmount - $discountAmount;
         $amountPaid = $validated['amount_paid'] ?? ($validated['payment_mode'] === 'cash' ? $netAmount : 0);
+
+        // CORRECTIF (montant payé > net à payer) : rien ne plafonnait
+        // amount_paid par rapport au montant réellement dû. Un mode non-
+        // especes (mobile_money, credit, mixed) laissant taper un montant
+        // superieur au net a payer se traduisait par un amount_paid stocke
+        // au-dela du necessaire, gonflant a tort le KPI "Encaissements" du
+        // resume du jour (qui fait un simple sum(amount_paid)) sans que
+        // cet exces ne corresponde a un vrai encaissement supplementaire.
+        // Le mode "cash" n'est pas concerne : le champ y est deja verrouille
+        // sur le montant net cote frontend (pas de gestion de rendu de
+        // monnaie pour l'instant, hors scope de ce correctif).
+        if ($amountPaid > $netAmount) {
+            return response()->json([
+                'message' => "Le montant paye ({$amountPaid} FCFA) ne peut pas depasser le net a payer ({$netAmount} FCFA).",
+                'errors'  => ['amount_paid' => ['Le montant paye ne peut pas depasser le net a payer.']],
+            ], 422);
+        }
+
         $amountDue  = max(0, $netAmount - $amountPaid);
 
         // CORRECTIFS (points 1 et 2) : des qu'un reste a payer existe, il
