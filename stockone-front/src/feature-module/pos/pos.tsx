@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../core/services/apiService';
 import { all_routes } from '../router/all_routes';
@@ -65,6 +65,14 @@ const Pos: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [, setSearchingClient] = useState(false);
 
+  // Création inline d'un nouveau client depuis la caisse (aucune autre
+  // page "Clients" n'existe dans le frontend — c'était un vrai trou avant
+  // ce correctif : impossible de créer un client pour une vente à crédit
+  // classique, en dehors du flux "Extra").
+  const [showCreateClient, setShowCreateClient] = useState(false);
+  const [newClient, setNewClient] = useState({ name:'', firstname:'', phone:'' });
+  const [creatingClient, setCreatingClient] = useState(false);
+
   const [paymentMode,   setPaymentMode]   = useState<PaymentMode>('cash');
   const [amountPaid,    setAmountPaid]    = useState('');
   const [discountAmount,setDiscountAmount]= useState('0');
@@ -101,15 +109,61 @@ const Pos: React.FC = () => {
     (p.reference || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const searchClients = async (q: string) => {
+  // CORRECTIFS mineurs (debounce + anti-obsolescence) : avant, chaque
+  // frappe déclenchait un appel réseau immédiat, et si une réponse plus
+  // ancienne arrivait après une plus récente, elle pouvait écraser des
+  // résultats plus à jour à l'écran. Un debounce de 300ms + un numéro de
+  // requête (clientSearchSeq) réglent les deux.
+  const clientSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clientSearchSeq   = useRef(0);
+
+  const searchClients = (q: string) => {
     setClientSearch(q);
+    if (clientSearchTimer.current) clearTimeout(clientSearchTimer.current);
+
     if (q.length < 2) { setClientResults([]); return; }
-    setSearchingClient(true);
+
+    const seq = ++clientSearchSeq.current;
+    clientSearchTimer.current = setTimeout(async () => {
+      setSearchingClient(true);
+      try {
+        const res = await api.get<{ data: Client[] }>('/clients', { search: q });
+        if (seq === clientSearchSeq.current) setClientResults(res.data);
+      } catch { /* silencieux */ }
+      finally { setSearchingClient(false); }
+    }, 300);
+  };
+
+  const openCreateClient = () => {
+    // On pré-remplit le nom avec ce qui a déjà été tapé dans la recherche,
+    // pour éviter une double saisie — reste modifiable.
+    setNewClient({ name: clientSearch, firstname: '', phone: '' });
+    setShowCreateClient(true);
+  };
+
+  const handleCreateClient = async () => {
+    if (!newClient.name.trim() || !newClient.phone.trim()) {
+      setError('Nom et téléphone requis pour créer un client.');
+      return;
+    }
+    setCreatingClient(true);
+    setError(null);
     try {
-      const res = await api.get<{ data: Client[] }>('/clients', { search: q });
-      setClientResults(res.data);
-    } catch { /* silencieux */ }
-    finally { setSearchingClient(false); }
+      const res = await api.post<{ data: Client }>('/clients', {
+        name: newClient.name.trim(),
+        firstname: newClient.firstname.trim() || undefined,
+        phone: newClient.phone.trim(),
+      });
+      setSelectedClient(res.data);
+      setShowCreateClient(false);
+      setNewClient({ name:'', firstname:'', phone:'' });
+      setClientSearch('');
+      setClientResults([]);
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la création du client.");
+    } finally {
+      setCreatingClient(false);
+    }
   };
 
   const addToCart = (product: Product, unit: ProductUnit, saleType: CartItem['sale_type']) => {
@@ -421,6 +475,32 @@ const Pos: React.FC = () => {
                     <i className="ti ti-x"/>
                   </button>
                 </div>
+              ) : showCreateClient ? (
+                <div className="p-2 rounded-3" style={{background:'#fff7ed',border:'1px solid #FED7AA'}}>
+                  <div className="fs-11 fw-600 mb-2" style={{color:'#F97316'}}>Nouveau client</div>
+                  <div className="row g-1 mb-1">
+                    <div className="col-6">
+                      <input className="form-control form-control-sm" placeholder="Nom *"
+                        value={newClient.name} onChange={e => setNewClient(f=>({...f,name:e.target.value}))}/>
+                    </div>
+                    <div className="col-6">
+                      <input className="form-control form-control-sm" placeholder="Prénom"
+                        value={newClient.firstname} onChange={e => setNewClient(f=>({...f,firstname:e.target.value}))}/>
+                    </div>
+                  </div>
+                  <input className="form-control form-control-sm mb-2" placeholder="Téléphone *"
+                    value={newClient.phone} onChange={e => setNewClient(f=>({...f,phone:e.target.value}))}/>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-sm flex-grow-1" disabled={creatingClient} onClick={handleCreateClient}
+                      style={{background:'#F97316',color:'#fff',border:'none',borderRadius:6,fontSize:12,fontWeight:600}}>
+                      {creatingClient ? <span className="spinner-border spinner-border-sm"/> : 'Créer et sélectionner'}
+                    </button>
+                    <button className="btn btn-sm" onClick={() => setShowCreateClient(false)}
+                      style={{background:'#f3f4f6',border:'none',borderRadius:6,fontSize:12}}>
+                      Annuler
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="position-relative">
                   <input type="text" className="form-control form-control-sm" placeholder="Rechercher un client..."
@@ -434,6 +514,14 @@ const Pos: React.FC = () => {
                           {c.firstname} {c.name} — {c.phone}
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {clientSearch.length >= 2 && clientResults.length === 0 && (
+                    <div className="fs-12 mt-2" style={{color:'#6b7280'}}>
+                      Aucun client trouvé pour « {clientSearch} ».{' '}
+                      <span style={{color:'#F97316',cursor:'pointer',fontWeight:600}} onClick={openCreateClient}>
+                        Créer ce client
+                      </span>
                     </div>
                   )}
                 </div>
