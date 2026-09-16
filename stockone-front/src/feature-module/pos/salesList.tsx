@@ -65,6 +65,7 @@ const SalesList: React.FC = () => {
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [cancelTarget, setCancelTarget] = useState<SaleListItem | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [cancelling,   setCancelling]   = useState(false);
   const [holdingId,    setHoldingId]    = useState<number | null>(null);
   const [printingId,   setPrintingId]   = useState<string | null>(null);
@@ -108,12 +109,19 @@ const SalesList: React.FC = () => {
 
   const confirmCancel = async () => {
     if (!cancelTarget) return;
+    // Le motif est obligatoire (le backend le refuse aussi) : on valide
+    // ici pour donner un retour immédiat plutôt qu'un aller-retour serveur.
+    if (cancelReason.trim().length < 5) {
+      setError("Indiquez un motif d'annulation explicite (5 caractères minimum).");
+      return;
+    }
     setCancelling(true);
     setError(null);
     try {
-      await api.post(`/sales/${cancelTarget.id}/cancel`);
+      await api.post(`/sales/${cancelTarget.id}/cancel`, { cancel_reason: cancelReason.trim() });
       setSuccess('Vente annulée et stock restauré.');
       setCancelTarget(null);
+      setCancelReason('');
       load();
       setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) { setError(e.message); }
@@ -423,17 +431,30 @@ const SalesList: React.FC = () => {
             <div className="modal-content" style={{borderRadius:12,border:'none'}}>
               <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
                 <h5 className="modal-title fw-700" style={{color:'#dc2626'}}><i className="ti ti-alert-triangle me-2"/>Annuler la vente</h5>
-                <button className="btn-close" onClick={() => setCancelTarget(null)}/>
+                <button className="btn-close" onClick={() => { setCancelTarget(null); setCancelReason(''); }}/>
               </div>
               <div className="modal-body">
                 <p className="fs-14">
                   Annuler la vente <strong>{cancelTarget.invoice_number}</strong> ? Le stock sera automatiquement restauré.
                 </p>
+                <div className="mt-3">
+                  <label className="form-label fs-13 fw-600">
+                    Motif de l'annulation <span className="text-danger">*</span>
+                  </label>
+                  <textarea className="form-control" rows={2} autoFocus
+                    placeholder="Ex : erreur de saisie, client s'est ravisé, mauvais produit..."
+                    value={cancelReason}
+                    onChange={e => setCancelReason(e.target.value)}
+                    style={{borderColor: (cancelReason.length > 0 && cancelReason.trim().length < 5) ? '#fca5a5' : '#e5e7eb', borderRadius:8}}/>
+                  <div className="fs-11 text-muted mt-1">
+                    Cette annulation sera enregistrée à votre nom, avec la date et ce motif.
+                  </div>
+                </div>
               </div>
               <div className="modal-footer" style={{borderTop:'1px solid #e5e7eb'}}>
-                <button className="btn btn-sm px-4" style={{background:'#f3f4f6',border:'none',borderRadius:8}} onClick={() => setCancelTarget(null)}>Retour</button>
-                <button className="btn btn-sm px-4" disabled={cancelling} onClick={confirmCancel}
-                  style={{background:'#dc2626',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
+                <button className="btn btn-sm px-4" style={{background:'#f3f4f6',border:'none',borderRadius:8}} onClick={() => { setCancelTarget(null); setCancelReason(''); }}>Retour</button>
+                <button className="btn btn-sm px-4" disabled={cancelling || cancelReason.trim().length < 5} onClick={confirmCancel}
+                  style={{background: cancelReason.trim().length < 5 ? '#fca5a5' : '#dc2626',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
                   {cancelling ? <span className="spinner-border spinner-border-sm"/> : 'Confirmer l\'annulation'}
                 </button>
               </div>
