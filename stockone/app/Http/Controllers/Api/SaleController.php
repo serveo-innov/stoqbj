@@ -401,7 +401,7 @@ class SaleController extends Controller
         $shopId = $this->requireShopId($request);
 
         $sale = Sale::forShop($shopId)
-            ->with(['items.productUnit.product', 'user', 'client', 'extraIdentity', 'creditSale.payments'])
+            ->with(['items.productUnit.product', 'user', 'client', 'extraIdentity', 'creditSale.payments', 'cancelledBy'])
             ->findOrFail($id);
 
         return response()->json(['data' => $sale]);
@@ -450,6 +450,18 @@ class SaleController extends Controller
             return response()->json(['message' => 'Impossible : un paiement partiel a déjà été reçu sur ce crédit.'], 409);
         }
 
+        // TRACABILITE : motif d'annulation desormais OBLIGATOIRE (min 5
+        // caracteres pour eviter les "." ou "x" qui videraient la mesure
+        // de son sens). L'annulation de vente est un vecteur de fraude
+        // classique en caisse : sans motif ni auteur enregistres, aucun
+        // controle a posteriori n'etait possible.
+        $validated = $request->validate([
+            'cancel_reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'cancel_reason.required' => "Le motif d'annulation est obligatoire.",
+            'cancel_reason.min'      => "Le motif d'annulation doit etre explicite (5 caracteres minimum).",
+        ]);
+
         DB::beginTransaction();
         try {
             foreach ($sale->items as $item) {
@@ -465,12 +477,19 @@ class SaleController extends Controller
                     'quantity'        => $item->quantity,
                     'stock_before'    => $result['unit_before'],
                     'stock_after'     => $result['unit_after'],
-                    'reason'          => 'Annulation vente #' . $sale->invoice_number,
+                    'reason'          => 'Annulation vente #' . $sale->invoice_number . ' — ' . $validated['cancel_reason'],
                     'moved_at'        => now(),
                 ]);
             }
 
-            $sale->update(['status' => 'cancelled']);
+            // TRACABILITE : on enregistre QUI a annule, QUAND et POURQUOI,
+            // en plus du simple changement de statut.
+            $sale->update([
+                'status'        => 'cancelled',
+                'cancelled_by'  => $request->user()->id,
+                'cancelled_at'  => now(),
+                'cancel_reason' => $validated['cancel_reason'],
+            ]);
             if ($sale->creditSale) {
                 // CORRECTIF (point 5, revu) : statut dedie "cancelled" au
                 // lieu de reutiliser "paid" — un credit annule n'est pas

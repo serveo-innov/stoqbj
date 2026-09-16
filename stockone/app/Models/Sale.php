@@ -21,6 +21,9 @@ class Sale extends Model
         'amount_paid',
         'amount_due',
         'status',
+        'cancelled_by',
+        'cancelled_at',
+        'cancel_reason',
         'invoice_printed',
         'notes',
         'sold_at',
@@ -30,6 +33,7 @@ class Sale extends Model
     {
         return [
             'sold_at'         => 'datetime',
+            'cancelled_at'    => 'datetime',
             'invoice_printed' => 'boolean',
             'total_amount'    => 'decimal:2',
             'discount_amount' => 'decimal:2',
@@ -70,6 +74,12 @@ class Sale extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Qui a annule cette vente (null si la vente n'est pas annulee).
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function client()
