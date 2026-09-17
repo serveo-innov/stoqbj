@@ -102,6 +102,11 @@ class Sale extends Model
         return $this->hasOne(CreditSale::class);
     }
 
+    public function refunds()
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     // ──────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────

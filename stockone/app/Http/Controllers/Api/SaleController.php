@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\CreditSale;
 use App\Models\ExtraSaleIdentity;
 use App\Models\ProductUnit;
+use App\Models\Refund;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\StockMovement;
@@ -401,7 +402,7 @@ class SaleController extends Controller
         $shopId = $this->requireShopId($request);
 
         $sale = Sale::forShop($shopId)
-            ->with(['items.productUnit.product', 'user', 'client', 'extraIdentity', 'creditSale.payments', 'cancelledBy'])
+            ->with(['items.productUnit.product', 'user', 'client', 'extraIdentity', 'creditSale.payments', 'cancelledBy', 'refunds.processedBy'])
             ->findOrFail($id);
 
         return response()->json(['data' => $sale]);
@@ -446,8 +447,21 @@ class SaleController extends Controller
             return response()->json(['message' => 'Cette vente est déjà annulée.'], 409);
         }
 
-        if ($sale->creditSale && $sale->creditSale->amount_paid > 0) {
-            return response()->json(['message' => 'Impossible : un paiement partiel a déjà été reçu sur ce crédit.'], 409);
+        // REMBOURSEMENT (remplace l'ancien blocage dur) : si un paiement a
+        // deja ete recu sur le credit associe, l'annulation reste possible
+        // mais EXIGE explicitement un remboursement confirme — ce n'est
+        // plus un cul-de-sac. L'argent deja recu doit etre rendu au client
+        // avant que la vente ne soit effacee, et ce remboursement est
+        // desormais trace (table refunds) plutot que silencieusement
+        // ignore ou bloque sans issue.
+        $needsRefund = $sale->creditSale && (float) $sale->creditSale->amount_paid > 0;
+
+        $rules = [
+            'cancel_reason' => ['required', 'string', 'min:5', 'max:500'],
+        ];
+        if ($needsRefund) {
+            $rules['refund_confirmed'] = ['required', 'accepted'];
+            $rules['refund_method']    = ['required', 'in:cash,mobile_money,virement'];
         }
 
         // TRACABILITE : motif d'annulation desormais OBLIGATOIRE (min 5
@@ -455,11 +469,12 @@ class SaleController extends Controller
         // de son sens). L'annulation de vente est un vecteur de fraude
         // classique en caisse : sans motif ni auteur enregistres, aucun
         // controle a posteriori n'etait possible.
-        $validated = $request->validate([
-            'cancel_reason' => ['required', 'string', 'min:5', 'max:500'],
-        ], [
-            'cancel_reason.required' => "Le motif d'annulation est obligatoire.",
-            'cancel_reason.min'      => "Le motif d'annulation doit etre explicite (5 caracteres minimum).",
+        $validated = $request->validate($rules, [
+            'cancel_reason.required'    => "Le motif d'annulation est obligatoire.",
+            'cancel_reason.min'         => "Le motif d'annulation doit etre explicite (5 caracteres minimum).",
+            'refund_confirmed.required' => "Vous devez confirmer avoir rembourse le montant deja recu.",
+            'refund_confirmed.accepted' => "Vous devez confirmer avoir rembourse le montant deja recu.",
+            'refund_method.required'    => "Le moyen de remboursement est requis.",
         ]);
 
         DB::beginTransaction();
@@ -491,6 +506,25 @@ class SaleController extends Controller
                 'cancel_reason' => $validated['cancel_reason'],
             ]);
             if ($sale->creditSale) {
+                // Enregistrement du remboursement si un paiement avait ete
+                // recu — un vrai evenement trace, distinct de la simple
+                // annulation. amount_paid n'est JAMAIS modifie : c'est un
+                // fait historique (ce montant a reellement ete recu a
+                // l'origine) ; le Refund documente separement qu'il a ete
+                // rendu.
+                if ($needsRefund) {
+                    Refund::create([
+                        'shop_id'        => $shopId,
+                        'sale_id'        => $sale->id,
+                        'credit_sale_id' => $sale->creditSale->id,
+                        'processed_by'   => $request->user()->id,
+                        'amount'         => $sale->creditSale->amount_paid,
+                        'method'         => $validated['refund_method'],
+                        'notes'          => $validated['cancel_reason'],
+                        'refunded_at'    => now(),
+                    ]);
+                }
+
                 // CORRECTIF (point 5, revu) : statut dedie "cancelled" au
                 // lieu de reutiliser "paid" — un credit annule n'est pas
                 // "regle", c'est un etat different. amount_due (montant
