@@ -66,6 +66,9 @@ const SalesList: React.FC = () => {
 
   const [cancelTarget, setCancelTarget] = useState<SaleListItem | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [refundRequired,  setRefundRequired]  = useState(false);
+  const [refundConfirmed, setRefundConfirmed] = useState(false);
+  const [refundMethod,    setRefundMethod]    = useState('cash');
   const [cancelling,   setCancelling]   = useState(false);
   const [holdingId,    setHoldingId]    = useState<number | null>(null);
   const [printingId,   setPrintingId]   = useState<string | null>(null);
@@ -115,16 +118,37 @@ const SalesList: React.FC = () => {
       setError("Indiquez un motif d'annulation explicite (5 caractères minimum).");
       return;
     }
+    // Si le backend a déjà signalé qu'un remboursement est requis, on
+    // exige la confirmation avant même d'envoyer la requête.
+    if (refundRequired && !refundConfirmed) {
+      setError('Confirmez avoir remboursé le client avant de continuer.');
+      return;
+    }
     setCancelling(true);
     setError(null);
     try {
-      await api.post(`/sales/${cancelTarget.id}/cancel`, { cancel_reason: cancelReason.trim() });
+      const payload: any = { cancel_reason: cancelReason.trim() };
+      if (refundRequired) {
+        payload.refund_confirmed = true;
+        payload.refund_method = refundMethod;
+      }
+      await api.post(`/sales/${cancelTarget.id}/cancel`, payload);
       setSuccess('Vente annulée et stock restauré.');
       setCancelTarget(null);
       setCancelReason('');
+      setRefundRequired(false);
+      setRefundConfirmed(false);
       load();
       setTimeout(() => setSuccess(null), 3000);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) {
+      // Le backend indique qu'un remboursement est requis (paiement déjà
+      // reçu sur ce crédit) : on affiche l'étape de remboursement au lieu
+      // de rester bloqué sans issue, comme c'était le cas avant.
+      if (e.errors?.refund_confirmed || e.errors?.refund_method) {
+        setRefundRequired(true);
+      }
+      setError(e.message);
+    }
     finally { setCancelling(false); }
   };
 
@@ -305,7 +329,7 @@ const SalesList: React.FC = () => {
                                   style={{background:'#fffbeb',color:'#d97706',border:'none',borderRadius:6,fontSize:11}}>
                                   {holdingId === s.id ? <span className="spinner-border spinner-border-sm"/> : <i className="ti ti-player-pause"/>}
                                 </button>
-                                <button className="btn btn-sm" title="Annuler" onClick={() => setCancelTarget(s)}
+                                <button className="btn btn-sm" title="Annuler" onClick={() => { setError(null); setRefundRequired(false); setRefundConfirmed(false); setCancelTarget(s); }}
                                   style={{background:'#fef2f2',color:'#dc2626',border:'none',borderRadius:6,fontSize:11}}>
                                   <i className="ti ti-x"/>
                                 </button>
@@ -431,12 +455,17 @@ const SalesList: React.FC = () => {
             <div className="modal-content" style={{borderRadius:12,border:'none'}}>
               <div className="modal-header" style={{borderBottom:'1px solid #e5e7eb'}}>
                 <h5 className="modal-title fw-700" style={{color:'#dc2626'}}><i className="ti ti-alert-triangle me-2"/>Annuler la vente</h5>
-                <button className="btn-close" onClick={() => { setCancelTarget(null); setCancelReason(''); }}/>
+                <button className="btn-close" onClick={() => { setCancelTarget(null); setCancelReason(''); setError(null); setRefundRequired(false); setRefundConfirmed(false); }}/>
               </div>
               <div className="modal-body">
                 <p className="fs-14">
                   Annuler la vente <strong>{cancelTarget.invoice_number}</strong> ? Le stock sera automatiquement restauré.
                 </p>
+                {error && (
+                  <div className="alert mb-3" style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,color:'#dc2626',fontSize:13}}>
+                    <i className="ti ti-alert-circle me-2"/>{error}
+                  </div>
+                )}
                 <div className="mt-3">
                   <label className="form-label fs-13 fw-600">
                     Motif de l'annulation <span className="text-danger">*</span>
@@ -450,11 +479,39 @@ const SalesList: React.FC = () => {
                     Cette annulation sera enregistrée à votre nom, avec la date et ce motif.
                   </div>
                 </div>
+
+                {refundRequired && (
+                  <div className="p-3 mt-3 rounded-3" style={{background:'#fff7ed',border:'1px solid #FED7AA'}}>
+                    <div className="fs-13 fw-600 mb-2" style={{color:'#EA580C'}}>
+                      <i className="ti ti-cash-banknote me-1"/>Remboursement requis
+                    </div>
+                    <p className="fs-13 mb-2">
+                      Un paiement a déjà été reçu sur le crédit associé à cette vente. Pour
+                      annuler, vous devez d'abord rembourser le client.
+                    </p>
+                    <div className="mb-2">
+                      <label className="form-label fs-13 fw-600">Moyen de remboursement</label>
+                      <select className="form-select form-select-sm" value={refundMethod}
+                        onChange={e => setRefundMethod(e.target.value)} style={{borderColor:'#e5e7eb',borderRadius:8}}>
+                        <option value="cash">Espèces</option>
+                        <option value="mobile_money">Mobile Money</option>
+                        <option value="virement">Virement</option>
+                      </select>
+                    </div>
+                    <div className="form-check">
+                      <input className="form-check-input" type="checkbox" id="refundConfirmed"
+                        checked={refundConfirmed} onChange={e => setRefundConfirmed(e.target.checked)}/>
+                      <label className="form-check-label fs-13" htmlFor="refundConfirmed">
+                        Je confirme avoir remis cette somme au client avant de continuer.
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer" style={{borderTop:'1px solid #e5e7eb'}}>
-                <button className="btn btn-sm px-4" style={{background:'#f3f4f6',border:'none',borderRadius:8}} onClick={() => { setCancelTarget(null); setCancelReason(''); }}>Retour</button>
-                <button className="btn btn-sm px-4" disabled={cancelling || cancelReason.trim().length < 5} onClick={confirmCancel}
-                  style={{background: cancelReason.trim().length < 5 ? '#fca5a5' : '#dc2626',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
+                <button className="btn btn-sm px-4" style={{background:'#f3f4f6',border:'none',borderRadius:8}} onClick={() => { setCancelTarget(null); setCancelReason(''); setError(null); setRefundRequired(false); setRefundConfirmed(false); }}>Retour</button>
+                <button className="btn btn-sm px-4" disabled={cancelling || cancelReason.trim().length < 5 || (refundRequired && !refundConfirmed)} onClick={confirmCancel}
+                  style={{background: (cancelReason.trim().length < 5 || (refundRequired && !refundConfirmed)) ? '#fca5a5' : '#dc2626',color:'#fff',border:'none',borderRadius:8,fontWeight:600}}>
                   {cancelling ? <span className="spinner-border spinner-border-sm"/> : 'Confirmer l\'annulation'}
                 </button>
               </div>
