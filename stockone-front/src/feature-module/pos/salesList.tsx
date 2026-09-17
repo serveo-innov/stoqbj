@@ -20,6 +20,15 @@ interface SaleDetail extends SaleListItem {
   total_amount: string;
   discount_amount: string;
   notes: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  cancelled_by: { name: string; firstname: string } | null;
+  refunds: {
+    amount: string;
+    method: string;
+    refunded_at: string;
+    processed_by: { name: string; firstname: string };
+  }[];
   items: {
     id: number;
     sale_type: string;
@@ -39,7 +48,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 };
 
 const paymentModeLabels: Record<string, string> = {
-  cash: 'Espèces', credit: 'Crédit', mobile_money: 'Mobile Money', mixed: 'Mixte',
+  cash: 'Espèces', credit: 'Crédit', mobile_money: 'Mobile Money', mixed: 'Mixte', virement: 'Virement',
 };
 
 const saleTypeLabels: Record<string, string> = { gros:'Gros', detail:'Détail', extra:'Extra' };
@@ -431,6 +440,33 @@ const SalesList: React.FC = () => {
                         <div className="fs-11 fw-600" style={{color:'#7c3aed'}}>Crédit associé</div>
                         <div className="fs-13">Statut : {detail.credit_sale.status} — Reste dû : {fmt(detail.credit_sale.amount_remaining)}</div>
                         <div className="fs-12 text-muted">Échéance : {new Date(detail.credit_sale.due_date).toLocaleDateString('fr-FR')}</div>
+                      </div>
+                    )}
+
+                    {detail.status === 'cancelled' && (
+                      <div className="p-2 mt-3 rounded-3" style={{background:'#fef2f2',border:'1px solid #fca5a5'}}>
+                        <div className="fs-11 fw-600" style={{color:'#dc2626'}}>
+                          <i className="ti ti-alert-triangle me-1"/>Vente annulée
+                        </div>
+                        <div className="fs-13">
+                          Par : {detail.cancelled_by ? `${detail.cancelled_by.firstname} ${detail.cancelled_by.name}` : 'Inconnu'}
+                        </div>
+                        {detail.cancelled_at && (
+                          <div className="fs-12 text-muted">Le : {fmtDate(detail.cancelled_at)}</div>
+                        )}
+                        {detail.cancel_reason && (
+                          <div className="fs-13 mt-1">Motif : {detail.cancel_reason}</div>
+                        )}
+                        {detail.refunds && detail.refunds.length > 0 && (
+                          <div className="mt-2 pt-2" style={{borderTop:'1px solid #fecaca'}}>
+                            <div className="fs-11 fw-600" style={{color:'#dc2626'}}>Remboursement(s)</div>
+                            {detail.refunds.map((r, i) => (
+                              <div key={i} className="fs-12">
+                                {fmt(r.amount)} en {paymentModeLabels[r.method] || r.method} — par {r.processed_by?.firstname} {r.processed_by?.name} le {fmtDate(r.refunded_at)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
