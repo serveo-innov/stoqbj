@@ -364,3 +364,11 @@ a { color: $primary; text-decoration: none; &:hover { color: $primary-dark; } }
   min-height: 0;
   overflow: hidden;
 }
+
+
+// Masque les icones natives Edge/Chromium (oeil, revealer) sur les champs
+// mot de passe, pour eviter le doublon avec notre icone personnalisee
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

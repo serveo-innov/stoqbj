@@ -109,3 +109,11 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+
+/* Masque les icones natives Edge/Chromium (oeil, revealer) sur les champs mot de passe,
+   pour eviter le doublon avec notre icone personnalisee */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
