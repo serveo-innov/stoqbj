@@ -498,12 +498,20 @@ class SaleController extends Controller
             }
 
             // TRACABILITE : on enregistre QUI a annule, QUAND et POURQUOI,
-            // en plus du simple changement de statut.
+            // en plus du simple changement de statut. amount_due passe a 0
+            // (rien ne reste a recouvrer sur une vente annulee) — CORRECTIF
+            // : ce champ n'etait jamais mis a jour, la vente affichait donc
+            // encore un "Du" non nul meme apres annulation + remboursement,
+            // alors que le credit associe affichait correctement 0.
+            // amount_paid, lui, reste inchange : fait historique (ce
+            // montant a reellement ete recu a l'origine), separe du
+            // Refund qui documente qu'il a ete rendu.
             $sale->update([
                 'status'        => 'cancelled',
                 'cancelled_by'  => $request->user()->id,
                 'cancelled_at'  => now(),
                 'cancel_reason' => $validated['cancel_reason'],
+                'amount_due'    => 0,
             ]);
             if ($sale->creditSale) {
                 // Enregistrement du remboursement si un paiement avait ete
@@ -528,13 +536,14 @@ class SaleController extends Controller
                 // CORRECTIF (point 5, revu) : statut dedie "cancelled" au
                 // lieu de reutiliser "paid" — un credit annule n'est pas
                 // "regle", c'est un etat different. amount_due (montant
-                // initial) reste volontairement inchange : c'est un fait
-                // historique reel (la vente valait bien ce montant a
-                // l'origine), on ne l'efface pas. amount_remaining passe a
-                // 0 puisqu'il n'y a plus rien a recouvrer sur une vente
-                // annulee. (amount_paid est deja garanti a 0 ici, cf. le
-                // blocage 409 ci-dessus qui empeche l'annulation d'un
-                // credit deja partiellement paye.)
+                // initial du CREDIT, distinct de celui de la vente ci-
+                // dessus) reste volontairement inchange : fait historique
+                // reel (le credit valait bien ce montant a l'origine).
+                // amount_remaining passe a 0 puisqu'il n'y a plus rien a
+                // recouvrer. (Avant le parcours de remboursement, ce
+                // bloc n'etait atteignable que si amount_paid=0 ; ce n'est
+                // plus le cas depuis que amount_paid>0 declenche desormais
+                // needsRefund au lieu d'un blocage pur et simple.)
                 $sale->creditSale->update([
                     'status'           => 'cancelled',
                     'amount_remaining' => 0,
