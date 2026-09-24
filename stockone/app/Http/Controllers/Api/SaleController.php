@@ -579,6 +579,19 @@ class SaleController extends Controller
 
         $sales = $query->with('items')->get();
 
+        // CORRECTIF (credits_accordes) : meme raison que dans
+        // ReportController — Sale.amount_due diminue a chaque paiement
+        // recu sur le credit, CreditSale.amount_due reste le fait
+        // historique fiable pour "combien de credit accorde aujourd'hui".
+        // On reprend le meme filtre caissier que la requete ci-dessus.
+        $creditsAccordesQuery = CreditSale::forShop($shopId)
+            ->whereHas('sale', function ($q) use ($user) {
+                $q->completed()->today();
+                if ($user->isCaissier()) {
+                    $q->where('user_id', $user->id);
+                }
+            });
+
         $summary = [
             'date'              => today()->toDateString(),
             'nb_transactions'   => $sales->count(),
@@ -587,7 +600,7 @@ class SaleController extends Controller
             'ca_detail'         => $sales->flatMap->items->where('sale_type', 'detail')->sum('total_price'),
             'ca_extra'          => $sales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
             'encaissements'     => $sales->sum('amount_paid'),
-            'credits_accordes'  => $sales->where('payment_mode', 'credit')->sum('amount_due'),
+            'credits_accordes'  => $creditsAccordesQuery->sum('amount_due'),
             'nb_credits'        => $sales->whereIn('payment_mode', ['credit', 'mixed'])->count(),
         ];
 

@@ -42,7 +42,12 @@ class ReportController extends Controller
             ->get();
 
         // Crédits en cours
-        $credits = CreditSale::forShop($shopId)->whereNotIn('status', ['paid']);
+        // CORRECTIF : "cancelled" (nouveau statut introduit aujourd'hui)
+        // n'était pas exclu ici, contrairement à tous les autres endroits
+        // du module Crédit — un client dont l'unique crédit était annulé
+        // restait compté dans "nb_debtors", et un crédit annulé dont
+        // l'échéance d'origine était passée comptait comme "en retard".
+        $credits = CreditSale::forShop($shopId)->whereNotIn('status', ['paid', 'cancelled']);
 
         // Top 5 produits du jour
         $topProducts = SaleItem::whereHas('sale', fn($q) =>
@@ -65,6 +70,20 @@ class ReportController extends Controller
         $caYesterday = $yesterdaySales->sum('net_amount');
         $evolution   = $caYesterday > 0 ? round((($caToday - $caYesterday) / $caYesterday) * 100, 1) : null;
 
+        // CORRECTIF (credits_accordes) : Sale.amount_due DIMINUE a chaque
+        // paiement recu sur le credit (cf. CreditController::addPayment),
+        // ce n'est donc PAS un fait historique fiable pour repondre a
+        // "combien de credit ai-je accorde aujourd'hui ?" — un rapport du
+        // jour J consulte plus tard, apres que des paiements soient
+        // arrives, afficherait un montant plus petit que ce qui a
+        // reellement ete accorde ce jour-la. CreditSale.amount_due, lui,
+        // n'est JAMAIS modifie apres creation (verifie : addPayment ne
+        // touche que amount_paid/amount_remaining/status) — c'est la
+        // bonne source, immuable, pour ce chiffre.
+        $creditsAccordesToday = CreditSale::forShop($shopId)
+            ->whereHas('sale', fn($q) => $q->completed()->today())
+            ->sum('amount_due');
+
         return response()->json([
             'data' => [
                 'date'            => $today->toDateString(),
@@ -76,7 +95,7 @@ class ReportController extends Controller
                 'ca_extra'        => $todaySales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
                 'nb_transactions' => $todaySales->count(),
                 'encaissements'   => $todaySales->sum('amount_paid'),
-                'credits_accordes'=> $todaySales->whereIn('payment_mode', ['credit', 'mixed'])->sum('amount_due'),
+                'credits_accordes'=> $creditsAccordesToday,
                 'credits_en_cours'=> [
                     'total_remaining' => (clone $credits)->sum('amount_remaining'),
                     'nb_debtors'      => (clone $credits)->distinct('client_id')->count('client_id'),
@@ -129,12 +148,35 @@ class ReportController extends Controller
                 DB::raw("DATE_FORMAT(sold_at, '{$groupFormat}') as period"),
                 DB::raw('COUNT(*) as nb_transactions'),
                 DB::raw('SUM(net_amount) as ca_total'),
-                DB::raw('SUM(amount_paid) as encaissements'),
-                DB::raw('SUM(amount_due) as credits_accordes')
+                DB::raw('SUM(amount_paid) as encaissements')
             )
             ->groupBy('period')
             ->orderBy('period')
             ->get();
+
+        // CORRECTIF (credits_accordes) : Sale.amount_due diminue a chaque
+        // paiement recu (cf. CreditController::addPayment), donc SUM(sale.
+        // amount_due) sur une periode passee sous-estime ce qui a ete
+        // reellement accorde si des paiements sont arrives depuis.
+        // CreditSale.amount_due n'est lui jamais modifie apres creation —
+        // c'est la source fiable pour ce chiffre, calculee separement ici
+        // et rattachee a chaque periode.
+        $creditsAccordesByPeriod = CreditSale::query()
+            ->join('sales', 'credit_sales.sale_id', '=', 'sales.id')
+            ->where('sales.shop_id', $shopId)
+            ->where('sales.status', 'completed')
+            ->whereBetween('sales.sold_at', [$validated['from'], $validated['to'] . ' 23:59:59'])
+            ->select(
+                DB::raw("DATE_FORMAT(sales.sold_at, '{$groupFormat}') as period"),
+                DB::raw('SUM(credit_sales.amount_due) as credits_accordes')
+            )
+            ->groupBy('period')
+            ->pluck('credits_accordes', 'period');
+
+        $sales = $sales->map(function ($row) use ($creditsAccordesByPeriod) {
+            $row->credits_accordes = (float) ($creditsAccordesByPeriod[$row->period] ?? 0);
+            return $row;
+        });
 
         // Top produits sur la période
         $topProducts = SaleItem::whereHas('sale', fn($q) =>
@@ -172,7 +214,7 @@ class ReportController extends Controller
                     'ca_detail'        => $allSales->flatMap->items->where('sale_type', 'detail')->sum('total_price'),
                     'ca_extra'         => $allSales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
                     'encaissements'    => $allSales->sum('amount_paid'),
-                    'credits_accordes' => $allSales->whereIn('payment_mode', ['credit', 'mixed'])->sum('amount_due'),
+                    'credits_accordes' => $creditsAccordesByPeriod->sum(),
                     'nb_transactions'  => $allSales->count(),
                 ],
                 'timeline'        => $sales,
@@ -319,6 +361,17 @@ class ReportController extends Controller
         ->whereDate('paid_at', $date)
         ->sum('amount');
 
+        // CORRECTIF (credits_accordes) : meme raison que dashboard()/
+        // period() — Sale.amount_due diminue avec les paiements recus,
+        // CreditSale.amount_due reste le fait historique fiable. Ce
+        // rapport quotidien est en plus SAUVEGARDE en base
+        // (DailyReport::updateOrCreate) : un mauvais calcul ici fige une
+        // donnee fausse de façon definitive, contrairement aux endpoints
+        // calcules a la volee — raison de plus pour que ce soit exact.
+        $creditsAccordesJour = CreditSale::forShop($shopId)
+            ->whereHas('sale', fn($q) => $q->completed()->whereDate('sold_at', $date))
+            ->sum('amount_due');
+
         return DailyReport::updateOrCreate(
             ['shop_id' => $shopId, 'report_date' => $date->toDateString()],
             [
@@ -327,7 +380,7 @@ class ReportController extends Controller
                 'ca_extra'         => $sales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
                 'ca_total'         => $sales->sum('net_amount'),
                 'encaissements'    => $sales->sum('amount_paid'),
-                'credits_accordes' => $sales->whereIn('payment_mode', ['credit', 'mixed'])->sum('amount_due'),
+                'credits_accordes' => $creditsAccordesJour,
                 'credits_percus'   => $creditsPercus,
                 'nb_transactions'  => $sales->count(),
                 'nb_new_credits'   => $sales->whereIn('payment_mode', ['credit', 'mixed'])->count(),
