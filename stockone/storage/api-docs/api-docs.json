@@ -220,7 +220,7 @@
                                     "password": {
                                         "type": "string",
                                         "format": "password",
-                                        "example": "StockOne@2025"
+                                        "example": "votre-mot-de-passe"
                                     }
                                 },
                                 "type": "object"
