@@ -33,6 +33,7 @@ class StationeryShop extends Model
         'logo_path',
         'slogan',
         'brand_color',
+        'brand_color_secondary',
         'subscription_start',
         'subscription_end',
         'status',

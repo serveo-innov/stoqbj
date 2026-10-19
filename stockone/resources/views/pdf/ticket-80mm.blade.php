@@ -145,7 +145,7 @@
 <div class="footer-msg">
     <strong>Merci de votre confiance !</strong><br>
     @if($shop->slogan)<em>{{ $shop->slogan }}</em><br>@endif
-    <span class="stockone-badge">Stock.one</span> — {{ now()->format('d/m/Y H:i') }}
+    <span class="stockone-badge">Stoq.bj</span> — {{ now()->format('d/m/Y H:i') }}
 </div>
 
 </body>

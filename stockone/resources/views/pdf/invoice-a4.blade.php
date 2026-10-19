@@ -250,7 +250,7 @@
 <div class="footer">
     <div class="thank-you">Merci de votre confiance !</div>
     @if($shop->slogan)<em>{{ $shop->slogan }}</em><br>@endif
-    <span class="stockone-badge">Stock.one</span>
+    <span class="stockone-badge">Stoq.bj</span>
     <span style="margin-left:8px;">Document généré le {{ now()->format('d/m/Y à H:i') }}</span>
 </div>
 

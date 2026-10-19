@@ -182,7 +182,7 @@
 
 <div class="footer">
     Rapport genere le {{ now()->format('d/m/Y a H:i') }} &nbsp;|&nbsp;
-    <span class="stockone-badge">Stock.one</span> &nbsp;|&nbsp;
+    <span class="stockone-badge">Stoq.bj</span> &nbsp;|&nbsp;
     {{ $shop->shop_name }} &nbsp;|&nbsp; Document confidentiel
 </div>
 

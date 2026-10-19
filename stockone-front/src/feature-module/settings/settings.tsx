@@ -16,6 +16,7 @@ interface ShopSettings {
   ifu_number: string | null;
   rccm_number: string | null;
   brand_color: string | null;
+  brand_color_secondary: string | null;
   slogan: string | null;
   default_credit_days: number;
   status: string;
@@ -25,7 +26,7 @@ interface ShopSettings {
 const emptyForm = {
   commercial_name:'', owner_phone:'', owner_phone_secondary:'',
   address:'', city:'', neighborhood:'', ifu_number:'', rccm_number:'',
-  brand_color:'#F97316', slogan:'', default_credit_days:'7',
+  brand_color:'#F97316', brand_color_secondary:'#EA580C', slogan:'', default_credit_days:'7',
 };
 
 const statusLabels: Record<string, { label: string; color: string; bg: string }> = {
@@ -63,6 +64,7 @@ const Settings: React.FC = () => {
         ifu_number: res.data.ifu_number || '',
         rccm_number: res.data.rccm_number || '',
         brand_color: res.data.brand_color || '#F97316',
+        brand_color_secondary: res.data.brand_color_secondary || '#EA580C',
         slogan: res.data.slogan || '',
         default_credit_days: String(res.data.default_credit_days || 7),
       });
@@ -175,15 +177,24 @@ const Settings: React.FC = () => {
               <h6 className="fw-700 mb-3 fs-13">Identité commerciale</h6>
               <form onSubmit={handleSubmit}>
                 <div className="row g-2 mb-3">
-                  <div className="col-md-8">
+                  <div className="col-md-12">
                     <label className="form-label fs-13 fw-600">Nom commercial</label>
                     <input className="form-control" value={form.commercial_name}
                       onChange={e => setForm(f=>({...f,commercial_name:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                   </div>
-                  <div className="col-md-4">
-                    <label className="form-label fs-13 fw-600">Couleur de marque</label>
+                </div>
+                <div className="row g-2 mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label fs-13 fw-600">Couleur principale</label>
                     <input type="color" className="form-control form-control-color w-100" value={form.brand_color}
                       onChange={e => setForm(f=>({...f,brand_color:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    <p className="fs-11 text-muted mt-1 mb-0">Utilisee sur vos factures et tickets. Laissez par defaut pour garder la couleur Stoq.bj.</p>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label fs-13 fw-600">Couleur secondaire</label>
+                    <input type="color" className="form-control form-control-color w-100" value={form.brand_color_secondary}
+                      onChange={e => setForm(f=>({...f,brand_color_secondary:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
+                    <p className="fs-11 text-muted mt-1 mb-0">Accents (montants dus, alertes) sur vos documents.</p>
                   </div>
                 </div>
                 <div className="mb-3">

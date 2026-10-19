@@ -67,6 +67,7 @@ class ShopSettingsController extends Controller
                     new OA\Property(property: 'ifu_number',            type: 'string'),
                     new OA\Property(property: 'rccm_number',           type: 'string'),
                     new OA\Property(property: 'brand_color',           type: 'string', example: '#F97316'),
+                    new OA\Property(property: 'brand_color_secondary', type: 'string', example: '#EA580C'),
                     new OA\Property(property: 'slogan',                type: 'string'),
                     new OA\Property(property: 'default_credit_days',   type: 'integer'),
                 ]
@@ -96,6 +97,7 @@ class ShopSettingsController extends Controller
             'ifu_number'            => ['nullable', 'string', 'max:30'],
             'rccm_number'           => ['nullable', 'string', 'max:30'],
             'brand_color'           => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'brand_color_secondary' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'slogan'                => ['nullable', 'string', 'max:255'],
             'default_credit_days'   => ['sometimes', 'integer', 'min:1', 'max:365'],
         ]);

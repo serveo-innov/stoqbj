@@ -56,7 +56,7 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR'
 const emptyCreateForm = {
   shop_name:'', commercial_name:'', owner_name:'', owner_firstname:'', owner_phone:'',
   owner_email:'', address:'', city:'', neighborhood:'', ifu_number:'', rccm_number:'',
-  brand_color:'#1a73e8', trial_days:'14', admin_password:'',
+  brand_color:'#F97316', brand_color_secondary:'#EA580C', trial_days:'14', admin_password:'',
 };
 
 const emptyEditForm = {
@@ -503,17 +503,24 @@ const AdminShops: React.FC = () => {
                     </div>
                   </div>
                   <div className="row g-2 mb-2">
-                    <div className="col-4">
-                      <label className="form-label fs-13 fw-600">Couleur de marque</label>
+                    <div className="col-6">
+                      <label className="form-label fs-13 fw-600">Couleur principale</label>
                       <input type="color" className="form-control form-control-color" value={createForm.brand_color}
                         onChange={e => setCreateForm(f=>({...f,brand_color:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8,width:'100%'}}/>
                     </div>
-                    <div className="col-4">
+                    <div className="col-6">
+                      <label className="form-label fs-13 fw-600">Couleur secondaire</label>
+                      <input type="color" className="form-control form-control-color" value={createForm.brand_color_secondary}
+                        onChange={e => setCreateForm(f=>({...f,brand_color_secondary:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8,width:'100%'}}/>
+                    </div>
+                  </div>
+                  <div className="row g-2 mb-2">
+                    <div className="col-6">
                       <label className="form-label fs-13 fw-600">Jours d'essai</label>
                       <input type="number" className="form-control" min={1} max={90} value={createForm.trial_days}
                         onChange={e => setCreateForm(f=>({...f,trial_days:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>
                     </div>
-                    <div className="col-4">
+                    <div className="col-6">
                       <label className="form-label fs-13 fw-600">Mdp Admin <span className="text-danger">*</span></label>
                       <input type="password" className="form-control" required minLength={8} value={createForm.admin_password}
                         onChange={e => setCreateForm(f=>({...f,admin_password:e.target.value}))} style={{borderColor:'#e5e7eb',borderRadius:8}}/>

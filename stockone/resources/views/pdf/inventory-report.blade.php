@@ -9,12 +9,12 @@
 
         .header {
             display: table; width: 100%;
-            border-bottom: 3px solid #F97316;
+            border-bottom: 3px solid {{ $shop->brand_color ?? '#F97316' }};
             padding-bottom: 15px; margin-bottom: 20px;
         }
         .header-left  { display: table-cell; width: 60%; vertical-align: middle; }
         .header-right { display: table-cell; width: 40%; vertical-align: middle; text-align: right; }
-        .shop-name    { font-size: 18px; font-weight: bold; color: #F97316; }
+        .shop-name    { font-size: 18px; font-weight: bold; color: {{ $shop->brand_color ?? '#F97316' }}; }
         .report-title { font-size: 20px; font-weight: bold; color: #1a1a1a; }
         .report-meta  { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.6; }
         .report-meta strong { color: #1a1a1a; }
@@ -22,8 +22,8 @@
         .kpi-grid { display: table; width: 100%; margin-bottom: 20px; }
         .kpi-row  { display: table-row; }
         .kpi-cell { display: table-cell; width: 25%; padding: 5px; }
-        .kpi-box  { background: #fff7ed; border-left: 4px solid #F97316; padding: 12px; border-radius: 4px; }
-        .kpi-label{ font-size: 10px; color: #EA580C; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; }
+        .kpi-box  { background: #fff7ed; border-left: 4px solid {{ $shop->brand_color ?? '#F97316' }}; padding: 12px; border-radius: 4px; }
+        .kpi-label{ font-size: 10px; color: {{ $shop->brand_color_secondary ?? '#EA580C' }}; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; }
         .kpi-value{ font-size: 18px; font-weight: bold; color: #1a1a1a; margin-top: 4px; }
         .kpi-sub  { font-size: 10px; color: #555; margin-top: 2px; }
 
@@ -32,12 +32,12 @@
             background: #1a1a1a;
             padding: 6px 12px;
             margin-bottom: 12px; margin-top: 20px;
-            border-left: 4px solid #F97316;
+            border-left: 4px solid {{ $shop->brand_color ?? '#F97316' }};
         }
         h3.conforme { border-left-color: #16a34a; }
 
         table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-        th { background: #1a1a1a; color: #F97316; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
+        th { background: #1a1a1a; color: {{ $shop->brand_color ?? '#F97316' }}; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; }
         th:last-child, td:last-child { text-align: right; }
         td { padding: 7px 10px; border-bottom: 1px solid #fed7aa; font-size: 11px; }
         tr:nth-child(even) td { background: #fff7ed; }
@@ -46,18 +46,18 @@
         .gap-negative { color: #dc2626; font-weight: bold; }
 
         .confidential {
-            background: #fff7ed; border: 1px solid #F97316;
+            background: #fff7ed; border: 1px solid {{ $shop->brand_color ?? '#F97316' }};
             border-radius: 4px; padding: 8px 12px;
-            font-size: 10px; color: #EA580C; margin-bottom: 15px;
+            font-size: 10px; color: {{ $shop->brand_color_secondary ?? '#EA580C' }}; margin-bottom: 15px;
         }
 
         .footer {
             margin-top: 30px; padding-top: 12px;
-            border-top: 2px solid #F97316;
+            border-top: 2px solid {{ $shop->brand_color ?? '#F97316' }};
             text-align: center; font-size: 10px; color: #888;
         }
         .stockone-badge {
-            background: #1a1a1a; color: #F97316;
+            background: #1a1a1a; color: {{ $shop->brand_color ?? '#F97316' }};
             font-size: 10px; font-weight: bold;
             padding: 2px 8px; border-radius: 3px;
         }
