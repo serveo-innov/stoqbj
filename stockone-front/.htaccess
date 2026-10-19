@@ -1,0 +1,16 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Laisser passer les vrais fichiers et dossiers (assets, images, etc.)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Tout le reste (ex: /pos, /abonnement) est gere par React Router,
+  # cote navigateur : on renvoie toujours index.html, jamais un 404.
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Securite de base : empeche la navigation dans les dossiers sans index
+Options -Indexes

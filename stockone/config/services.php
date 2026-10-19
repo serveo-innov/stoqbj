@@ -35,12 +35,19 @@ return [
         ],
     ],
 
-    'kkiapay' => [
-    'public_key'         => env('KKIAPAY_PUBLIC_KEY'),
-    'private_key'        => env('KKIAPAY_PRIVATE_KEY'),
-    'secret'              => env('KKIAPAY_SECRET'),
-    'sandbox'             => env('KKIAPAY_SANDBOX', true),
-    'subscription_price'  => env('KKIAPAY_SUBSCRIPTION_PRICE', 35000),
-],
+    // PayDunya remplace Kkiapay. Cle unique (master_key) commune aux deux
+    // modes ; cle privee et token different entre test et live (voir
+    // PAYDUNYA-TEST-PRIVATE-KEY vs PAYDUNYA-LIVE-PRIVATE-KEY sur leur
+    // tableau de bord). 'sandbox' choisit la paire a utiliser ET change
+    // l'URL de base de l'API (sandbox-api vs api) — gere dans le controleur.
+    'paydunya' => [
+        'master_key'          => env('PAYDUNYA_MASTER_KEY'),
+        'test_private_key'    => env('PAYDUNYA_TEST_PRIVATE_KEY'),
+        'test_token'          => env('PAYDUNYA_TEST_TOKEN'),
+        'live_private_key'    => env('PAYDUNYA_LIVE_PRIVATE_KEY'),
+        'live_token'          => env('PAYDUNYA_LIVE_TOKEN'),
+        'sandbox'             => env('PAYDUNYA_SANDBOX', true),
+        'subscription_price'  => env('PAYDUNYA_SUBSCRIPTION_PRICE', 35000),
+    ],
 
 ];

@@ -4,8 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class KkiapayPaymentIntent extends Model
+/**
+ * Remplace KkiapayPaymentIntent (supprime ce fichier apres deploiement,
+ * voir table 'payment_intents' renommee par la migration associee).
+ */
+class PaymentIntent extends Model
 {
+    protected $table = 'payment_intents';
+
     protected $fillable = [
         'shop_id',
         'created_by',

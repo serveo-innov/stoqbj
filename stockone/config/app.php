@@ -54,6 +54,13 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // CORRECTIF : cette cle etait lue par PasswordResetController
+    // (config('app.frontend_url')) mais n'existait nulle part ici — le
+    // lien de reinitialisation de mot de passe etait donc casse (pas de
+    // domaine) si FRONTEND_URL n'etait pas deja definie dans le .env du
+    // serveur. Necessaire aussi pour les URLs de retour PayDunya.
+    'frontend_url' => env('FRONTEND_URL', 'https://stoq.bj'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

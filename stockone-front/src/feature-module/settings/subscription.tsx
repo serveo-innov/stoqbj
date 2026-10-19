@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../core/services/apiService';
 
 interface SubscriptionStatus {
@@ -7,8 +8,7 @@ interface SubscriptionStatus {
   subscription_end: string | null;
   days_until_expiry: number;
   amount: number;
-  kkiapay_public_key: string;
-  kkiapay_sandbox: boolean;
+  paydunya_sandbox: boolean;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -18,37 +18,52 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   closed:    { label:'Fermée',           color:'#6b7280', bg:'#f3f4f6' },
 };
 
+const PENDING_TOKEN_KEY = 'paydunya_pending_token';
+
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' F';
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' }) : '—';
 
-// Le SDK Kkiapay injecte ces fonctions globalement une fois le script chargé.
-declare global {
-  interface Window {
-    openKkiapayWidget?: (config: Record<string, unknown>) => void;
-    addSuccessListener?: (cb: (response: any) => void) => void;
-    addFailedListener?: (cb: (error: any) => void) => void;
-    removeSuccessListener?: (cb: (response: any) => void) => void;
-  }
-}
-
-const KKIAPAY_SCRIPT_ID = 'kkiapay-sdk-script';
-const KKIAPAY_SCRIPT_SRC = 'https://cdn.kkiapay.me/k.js';
-
 const Subscription: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [data,    setData]    = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [, setSdkReady]  = useState(false);
-  const [paying,    setPaying]    = useState(false); // widget ouvert, en attente du callback
-  const [confirming,setConfirming]= useState(false); // appel /confirm en cours
+  const [redirecting, setRedirecting] = useState(false); // appel /initiate en cours, avant redirection
+  const [confirming,  setConfirming]  = useState(false); // retour de PayDunya, appel /confirm en cours
 
-  // Référence de l'intention de paiement en cours — stockée en ref pour rester
-  // accessible depuis le callback Kkiapay (fermeture stable, pas de re-render).
-  const intentReferenceRef = useRef<string | null>(null);
+  // Token conserve localement au moment du clic "Payer" (voir handlePay).
+  // Permet de proposer "Verifier mon paiement" meme si l'onglet a ete
+  // ferme avant le retour automatique de PayDunya (donc sans ?token= dans
+  // l'URL cette fois-ci).
+  const [pendingToken, setPendingToken] = useState<string | null>(
+    () => localStorage.getItem(PENDING_TOKEN_KEY)
+  );
 
   useEffect(() => { load(); }, []);
+
+  // Au retour de PayDunya, l'URL contient ?paydunya=return&token=xxx
+  // (token ajoute automatiquement par PayDunya a notre return_url).
+  // On confirme une seule fois, puis on nettoie l'URL pour qu'un simple
+  // rechargement de page ne retente pas la meme confirmation.
+  useEffect(() => {
+    const paydunyaStatus = searchParams.get('paydunya');
+    const token = searchParams.get('token');
+
+    if (paydunyaStatus === 'cancelled') {
+      setError('Paiement annulé.');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    if (paydunyaStatus === 'return' && token) {
+      confirmPayment(token);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = async () => {
     try {
@@ -59,88 +74,40 @@ const Subscription: React.FC = () => {
     finally { setLoading(false); }
   };
 
-  // Charge le script Kkiapay une seule fois, à la demande
-  const ensureSdkLoaded = useCallback((): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (window.openKkiapayWidget) { setSdkReady(true); resolve(); return; }
-      const existing = document.getElementById(KKIAPAY_SCRIPT_ID);
-      if (existing) {
-        existing.addEventListener('load', () => { setSdkReady(true); resolve(); });
-        return;
-      }
-      const script = document.createElement('script');
-      script.id = KKIAPAY_SCRIPT_ID;
-      script.src = KKIAPAY_SCRIPT_SRC;
-      script.async = true;
-      script.onload = () => { setSdkReady(true); resolve(); };
-      script.onerror = () => reject(new Error('Impossible de charger le SDK Kkiapay. Vérifiez votre connexion.'));
-      document.body.appendChild(script);
-    });
-  }, []);
-
-  const handleSuccess = useCallback(async (response: any) => {
-    const transactionId = response?.transactionId;
-    const intentReference = intentReferenceRef.current;
-
-    if (!transactionId) {
-      setError('Réponse Kkiapay invalide (transaction introuvable).');
-      setPaying(false);
-      return;
-    }
-    if (!intentReference) {
-      setError("Session de paiement perdue — merci de relancer le paiement depuis le début.");
-      setPaying(false);
-      return;
-    }
+  const confirmPayment = async (token: string) => {
     setConfirming(true);
     setError(null);
     try {
-      await api.post('/subscription/kkiapay/confirm', {
-        transaction_id: transactionId,
-        intent_reference: intentReference,
-      });
+      await api.post('/subscription/paydunya/confirm', { token });
       setSuccess('Paiement confirmé — votre abonnement a été activé/prolongé.');
+      localStorage.removeItem(PENDING_TOKEN_KEY);
+      setPendingToken(null);
       load();
     } catch (e: any) {
-      setError(e.message || "Le paiement a été reçu mais la confirmation a échoué. Contactez le support avec l'ID de transaction : " + transactionId);
+      // Echec (ou simplement "pas encore paye") : on garde le token stocke,
+      // l'utilisateur peut reessayer "Verifier mon paiement" plus tard.
+      setError(e.message || "Le paiement n'a pas pu être confirmé. Si le montant a été débité, contactez le support.");
     } finally {
       setConfirming(false);
-      setPaying(false);
-      intentReferenceRef.current = null;
     }
-  }, []);
+  };
 
   const handlePay = async () => {
-    if (!data) return;
     setError(null);
-    setPaying(true);
+    setRedirecting(true);
     try {
-      // Étape 1 : demander une intention de paiement liée à la boutique AVANT
-      // d'ouvrir le widget — c'est ce qui empêche la réutilisation de la
-      // transaction d'une autre boutique lors de la confirmation.
-      const intentRes = await api.post<{ data: { intent_reference: string } }>('/subscription/kkiapay/initiate');
-      intentReferenceRef.current = intentRes.data.intent_reference;
-
-      await ensureSdkLoaded();
-
-      // On (re)branche le listener à chaque paiement pour capturer la bonne réponse
-      window.addSuccessListener?.(handleSuccess);
-      window.addFailedListener?.((_err: any) => {
-        setError('Le paiement a échoué ou a été annulé.');
-        setPaying(false);
-      });
-
-      window.openKkiapayWidget?.({
-        amount: data.amount,
-        key: data.kkiapay_public_key,
-        sandbox: data.kkiapay_sandbox,
-        position: 'center',
-        theme: '#F97316',
-        data: intentReferenceRef.current,
-      });
+      const res = await api.post<{ data: { checkout_url: string; token: string } }>('/subscription/paydunya/initiate');
+      // Conserve le token AVANT de quitter la page : si l'onglet se ferme
+      // ou que la redirection automatique de retour echoue, "Verifier mon
+      // paiement" pourra quand meme confirmer avec ce token, sans en
+      // dependre venant de l'URL.
+      localStorage.setItem(PENDING_TOKEN_KEY, res.data.token);
+      window.location.href = res.data.checkout_url;
+      // Pas de finally ici : la page quitte l'application, inutile de
+      // repasser redirecting a false avant le changement de page.
     } catch (e: any) {
-      setError(e.message || 'Erreur lors du chargement du paiement.');
-      setPaying(false);
+      setError(e.message || 'Erreur lors de la préparation du paiement.');
+      setRedirecting(false);
     }
   };
 
@@ -158,7 +125,9 @@ const Subscription: React.FC = () => {
 
   if (!data) return null;
   const st = statusConfig[data.status] || { label:data.status, color:'#6b7280', bg:'#f3f4f6' };
-  const isExpiringSoon = data.status === 'active' && data.days_until_expiry <= 7;
+  // CORRECTIF : ne se declenchait que pour 'active' — un essai gratuit
+  // n'affichait jamais ce bandeau, meme a quelques heures de la coupure.
+  const isExpiringSoon = (data.status === 'active' || data.status === 'trial') && data.days_until_expiry <= 7;
 
   return (
     <div>
@@ -172,6 +141,12 @@ const Subscription: React.FC = () => {
         </div>
       </div>
 
+      {confirming && (
+        <div className="alert mb-3 d-flex align-items-center gap-2"
+          style={{background:'#ecfeff',border:'1px solid #a5f3fc',borderRadius:8,color:'#0891b2'}}>
+          <span className="spinner-border spinner-border-sm"/>Confirmation du paiement en cours...
+        </div>
+      )}
       {success && (
         <div className="alert mb-3 d-flex align-items-center gap-2"
           style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:8,color:'#16a34a'}}>
@@ -186,7 +161,7 @@ const Subscription: React.FC = () => {
         </div>
       )}
 
-      {data.kkiapay_sandbox && (
+      {data.paydunya_sandbox && (
         <div className="alert mb-3 d-flex align-items-center gap-2"
           style={{background:'#ecfeff',border:'1px solid #a5f3fc',borderRadius:8,color:'#0891b2',fontSize:13}}>
           <i className="ti ti-flask"/>Mode test (sandbox) activé — aucun paiement réel ne sera prélevé.
@@ -222,25 +197,41 @@ const Subscription: React.FC = () => {
               </div>
 
               <div className="p-3 rounded-3 mb-3" style={{background:'#fff7ed',border:'1px solid #FED7AA'}}>
-                <div className="fs-12 text-muted mb-1">Prix de l'abonnement (30 jours)</div>
+                <div className="fs-12 text-muted mb-1">Prix de l'abonnement (12 mois)</div>
                 <div className="fs-22 fw-800" style={{color:'#F97316'}}>{fmt(data.amount)}</div>
               </div>
 
               <button className="btn w-100 d-flex align-items-center justify-content-center gap-2"
-                disabled={paying || confirming}
+                disabled={redirecting || confirming}
                 onClick={handlePay}
                 style={{background:'#F97316',color:'#fff',border:'none',borderRadius:8,padding:'12px',fontWeight:700}}>
-                {confirming ? (
-                  <><span className="spinner-border spinner-border-sm"/>Confirmation du paiement...</>
-                ) : paying ? (
-                  <><span className="spinner-border spinner-border-sm"/>Paiement en cours...</>
+                {redirecting ? (
+                  <><span className="spinner-border spinner-border-sm"/>Redirection vers PayDunya...</>
                 ) : (
                   <><i className="ti ti-device-mobile fs-18"/>Payer via Mobile Money / Carte</>
                 )}
               </button>
               <p className="fs-11 text-muted text-center mt-2 mb-0">
-                Paiement sécurisé via Kkiapay — Mobile Money (MTN, Moov) ou carte bancaire
+                Paiement sécurisé via PayDunya — Mobile Money (MTN, Moov) ou carte bancaire
               </p>
+
+              {pendingToken && (
+                <div className="mt-3 p-3 rounded-3" style={{background:'#ecfeff',border:'1px solid #a5f3fc'}}>
+                  <p className="fs-12 mb-2" style={{color:'#0891b2'}}>
+                    Un paiement a été lancé mais pas encore confirmé ici (onglet fermé trop tôt ?).
+                  </p>
+                  <button className="btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2"
+                    disabled={confirming || redirecting}
+                    onClick={() => confirmPayment(pendingToken)}
+                    style={{background:'#fff',color:'#0891b2',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px',fontWeight:600}}>
+                    {confirming ? (
+                      <><span className="spinner-border spinner-border-sm"/>Vérification...</>
+                    ) : (
+                      <><i className="ti ti-refresh fs-16"/>Vérifier mon paiement</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -253,7 +244,7 @@ const Subscription: React.FC = () => {
                 <div style={{width:32,height:32,borderRadius:'50%',background:'#fff7ed',color:'#F97316',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontWeight:700,fontSize:13}}>1</div>
                 <div>
                   <div className="fw-600 fs-13">Cliquez sur "Payer"</div>
-                  <div className="fs-12 text-muted">Une fenêtre sécurisée Kkiapay s'ouvre pour choisir votre mode de paiement.</div>
+                  <div className="fs-12 text-muted">Vous êtes redirigé vers la page de paiement sécurisée PayDunya.</div>
                 </div>
               </div>
               <div className="d-flex gap-3 mb-3">
@@ -267,7 +258,7 @@ const Subscription: React.FC = () => {
                 <div style={{width:32,height:32,borderRadius:'50%',background:'#f0fdf4',color:'#16a34a',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontWeight:700,fontSize:13}}>3</div>
                 <div>
                   <div className="fw-600 fs-13">Abonnement activé automatiquement</div>
-                  <div className="fs-12 text-muted">Dès confirmation du paiement, votre boutique reste (ou redevient) active pour 30 jours supplémentaires.</div>
+                  <div className="fs-12 text-muted">Vous êtes ramené automatiquement ici, et votre boutique reste (ou redevient) active pour 12 mois supplémentaires.</div>
                 </div>
               </div>
             </div>

@@ -29,9 +29,11 @@ Route::prefix('v1')->group(function () {
         'time'    => now()->toISOString(),
     ]));
 
-    // Webhook Kkiapay — public, verifie via signature x-kkiapay-secret (pas de Sanctum),
-    // throttle applique en filet de securite supplementaire contre le flood.
-    Route::post('/webhooks/kkiapay', [SubscriptionController::class, 'webhook'])
+    // Webhook PayDunya (IPN) — public, pas de secret partage a verifier cote
+    // PayDunya ; la confiance vient du rappel GET /confirm/{token} fait par
+    // le controleur lui-meme (voir SubscriptionController::verifyAndActivate).
+    // throttle en filet de securite supplementaire contre le flood.
+    Route::post('/webhooks/paydunya', [SubscriptionController::class, 'webhook'])
         ->middleware('throttle:30,1');
 
     // Auth public avec rate limiting
@@ -83,8 +85,8 @@ Route::prefix('v1')->group(function () {
 
             // Abonnement self-service via Kkiapay
             Route::get('subscription',                    [SubscriptionController::class, 'status']);
-            Route::post('subscription/kkiapay/initiate',  [SubscriptionController::class, 'initiate']);
-            Route::post('subscription/kkiapay/confirm',   [SubscriptionController::class, 'confirm']);
+            Route::post('subscription/paydunya/initiate', [SubscriptionController::class, 'initiate']);
+            Route::post('subscription/paydunya/confirm',  [SubscriptionController::class, 'confirm']);
         });
 
         Route::post('users/me/password', [UserController::class, 'changeOwnPassword']);

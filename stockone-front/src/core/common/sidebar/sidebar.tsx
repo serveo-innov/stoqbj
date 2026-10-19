@@ -24,6 +24,12 @@ const AppSidebar: React.FC = () => {
   const canSeeCatalogue = !isCaissier;
   const canSeeDebtors   = !isCaissier;
   const canSeeReports   = !isCaissier;
+  // CORRECTIF : une boutique suspendue ne peut plus rien charger a part
+  // les routes d'abonnement (voir SetTenantContext cote backend). Montrer
+  // le menu complet menerait chaque lien vers un 403. Le statut peut
+  // dater de la derniere connexion (pas rafraichi en direct) — en cas de
+  // decalage, le backend reste de toute facon la verite qui tranche.
+  const isSuspended = user?.shop?.status === 'suspended';
 
   return (
     <div style={{
@@ -48,6 +54,15 @@ const AppSidebar: React.FC = () => {
 
       {/* Menu */}
       <nav style={{padding:'8px'}}>
+        {isSuspended ? (
+          <>
+            <div style={{padding:'10px 12px', marginBottom:8, borderRadius:8, background:'rgba(220,38,38,0.12)', color:'#fca5a5', fontSize:12}}>
+              {!miniSidebar && <>Boutique suspendue. Payez pour la réactiver.</>}
+            </div>
+            <SLink to={all_routes.subscription} icon="ti-credit-card-pay" label="Abonnement" mini={miniSidebar} active={isActive(all_routes.subscription)}/>
+          </>
+        ) : (
+        <>
         {/* Le caissier n'a pas acces a /reports/dashboard : pas de lien
             Tableau de bord pour lui, la Caisse POS est son point d'entree. */}
         {!isCaissier && (
@@ -86,7 +101,7 @@ const AppSidebar: React.FC = () => {
           <>
             <Divider label="Rapports" mini={miniSidebar}/>
             <SLink to={all_routes.reports}       icon="ti-chart-bar"        label="Rapports"        mini={miniSidebar} active={isActive(all_routes.reports)}/>
-            <SLink to={all_routes.alerts}        icon="ti-sparkles"         label="Alertes & IA"      mini={miniSidebar} active={isActive(all_routes.alerts)}/>
+            <SLink to={all_routes.alerts}        icon="ti-sparkles"         label="Analyse produits"  mini={miniSidebar} active={isActive(all_routes.alerts)}/>
           </>
         )}
 
@@ -101,6 +116,11 @@ const AppSidebar: React.FC = () => {
             non pertinent pour le Super Admin qui agit via Admin > Boutiques */}
         {!isSuperAdmin && user?.permissions?.can_manage_shop_settings && (
           <>
+            {/* CORRECTIF : cette section n'avait pas d'en-tete Divider,
+                contrairement a toutes les autres (Catalogue, Stock,
+                Finance, Rapports, Admin, Super Admin) — elle semblait
+                visuellement rattachee au bloc Admin juste au-dessus. */}
+            <Divider label="Boutique" mini={miniSidebar}/>
             <SLink to={all_routes.settings}    icon="ti-settings"         label="Paramètres"      mini={miniSidebar} active={isActive(all_routes.settings)}/>
             <SLink to={all_routes.subscription} icon="ti-credit-card-pay" label="Abonnement"      mini={miniSidebar} active={isActive(all_routes.subscription)}/>
           </>
@@ -117,6 +137,8 @@ const AppSidebar: React.FC = () => {
         {/* Profil */}
         <Divider label="" mini={miniSidebar}/>
         <SLink to={all_routes.myProfile}     icon="ti-user-circle"      label="Mon profil"      mini={miniSidebar} active={isActive(all_routes.myProfile)}/>
+        </>
+        )}
       </nav>
     </div>
   );

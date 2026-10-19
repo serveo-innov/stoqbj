@@ -33,6 +33,16 @@ Schedule::call(function () {
     CheckSubscriptionsJob::dispatch()->onQueue('default');
 })->dailyAt('06:00')->name('check-subscriptions')->withoutOverlapping();
 
+// CORRECTIF : cette commande existait depuis un moment (app/Console/Commands/
+// SuspendExpiredTrials.php) mais n'etait inscrite nulle part ici — elle ne
+// s'est donc jamais executee. Une boutique auto-inscrite qui ne payait
+// jamais gardait un acces complet et illimite indefiniment. Juste apres
+// check-subscriptions, meme logique de groupe horaire.
+Schedule::command('shops:suspend-expired-trials')
+    ->dailyAt('06:05')
+    ->name('suspend-expired-trials')
+    ->withoutOverlapping();
+
 // ── Alertes stock : toutes les 4 heures
 Schedule::call(function () {
     CheckStockAlertsJob::dispatch()->onQueue('default');

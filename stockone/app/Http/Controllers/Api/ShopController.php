@@ -85,7 +85,8 @@ class ShopController extends Controller
                     new OA\Property(property: 'neighborhood',     type: 'string'),
                     new OA\Property(property: 'ifu_number',       type: 'string'),
                     new OA\Property(property: 'rccm_number',      type: 'string'),
-                    new OA\Property(property: 'brand_color',      type: 'string', example: '#1a73e8'),
+                    new OA\Property(property: 'brand_color',           type: 'string', example: '#F97316'),
+                    new OA\Property(property: 'brand_color_secondary', type: 'string', example: '#EA580C'),
                     new OA\Property(property: 'trial_days',       type: 'integer', example: 14),
                     new OA\Property(property: 'admin_password',   type: 'string', example: 'Password@123', description: 'Mot de passe du compte Admin Shop'),
                 ]
@@ -111,7 +112,8 @@ class ShopController extends Controller
             'neighborhood'    => ['nullable', 'string', 'max:100'],
             'ifu_number'      => ['nullable', 'string', 'max:30'],
             'rccm_number'     => ['nullable', 'string', 'max:30'],
-            'brand_color'     => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'brand_color'            => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'brand_color_secondary'  => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'trial_days'      => ['sometimes', 'integer', 'min:1', 'max:90'],
             'admin_password'  => ['required', 'string', 'min:8'],
         ]);
@@ -130,7 +132,13 @@ class ShopController extends Controller
                 'neighborhood'    => $validated['neighborhood'] ?? null,
                 'ifu_number'      => $validated['ifu_number'] ?? null,
                 'rccm_number'     => $validated['rccm_number'] ?? null,
-                'brand_color'     => $validated['brand_color'] ?? '#1a73e8',
+                // CORRECTIF : #1a73e8 (bleu) etait la vraie valeur par
+                // defaut appliquee a chaque nouvelle boutique (le
+                // "#F97316" affiche par defaut dans certains formulaires
+                // frontend n'etait qu'un repli d'affichage, pas la valeur
+                // reellement enregistree). Orange devient le vrai defaut.
+                'brand_color'            => $validated['brand_color'] ?? '#F97316',
+                'brand_color_secondary'  => $validated['brand_color_secondary'] ?? null,
                 'status'          => 'trial',
                 'trial_days'      => $validated['trial_days'] ?? 14,
             ]);
@@ -219,7 +227,8 @@ class ShopController extends Controller
             'neighborhood'         => ['nullable', 'string', 'max:100'],
             'ifu_number'           => ['nullable', 'string', 'max:30'],
             'rccm_number'          => ['nullable', 'string', 'max:30'],
-            'brand_color'          => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'brand_color'            => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'brand_color_secondary'  => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'slogan'               => ['nullable', 'string', 'max:255'],
             'default_credit_days'  => ['sometimes', 'integer', 'min:1', 'max:365'],
         ]);
@@ -345,10 +354,28 @@ class ShopController extends Controller
     {
         $shop = StationeryShop::findOrFail($id);
 
-        $status = $shop->subscription_end && $shop->subscription_end->isFuture()
-            ? 'active' : 'trial';
-
-        $shop->update(['status' => $status]);
+        // CORRECTIF : l'ancien code mettait 'trial' des que subscription_end
+        // etait depassee — exactement le critere cible par
+        // SuspendExpiredTrials (status=trial ET subscription_end <
+        // maintenant). La boutique etait re-suspendue au tout prochain
+        // passage du planificateur, souvent en moins de 24h, sans avoir
+        // eu de reelle chance de payer. Meme 'active' seul n'aurait pas
+        // suffi : avec une subscription_end deja ancienne, le delai de
+        // grace de CheckSubscriptionsJob (subscription_end < maintenant -
+        // 7 jours) aurait aussi ete immediatement depasse. On accorde donc
+        // une vraie fenetre fraiche quand l'abonnement est perime, pour
+        // que cette reactivation manuelle serve a quelque chose.
+        if ($shop->subscription_end && $shop->subscription_end->isFuture()) {
+            $status = 'active';
+            $shop->update(['status' => $status]);
+        } else {
+            $status = 'active';
+            $graceDays = (int) config('app.subscription_grace_days', 7);
+            $shop->update([
+                'status'           => $status,
+                'subscription_end' => now()->addDays($graceDays),
+            ]);
+        }
 
         return response()->json([
             'message' => 'Boutique reactivee.',

@@ -25,10 +25,22 @@ class SetTenantContext
             }
 
             if ($shop->isSuspended()) {
-                return response()->json([
-                    'message' => "Votre boutique est suspendue. Contactez l'administrateur.",
-                    'status'  => 'suspended',
-                ], 403);
+                // CORRECTIF : on laisse passer uniquement les routes de
+                // paiement self-service (statut + initiation/confirmation
+                // PayDunya), et seulement pour admin_shop (seul role
+                // encore autorise a se connecter suspendu, voir
+                // AuthController::login()). Tout le reste reste bloque.
+                $isPaymentRoute = $request->is(
+                    'api/v1/subscription',
+                    'api/v1/subscription/paydunya/*'
+                );
+
+                if (! ($isPaymentRoute && $user->role === 'admin_shop')) {
+                    return response()->json([
+                        'message' => "Votre boutique est suspendue. Rendez-vous sur la page Abonnement pour la reactiver.",
+                        'status'  => 'suspended',
+                    ], 403);
+                }
             }
 
             if ($shop->status === 'closed') {

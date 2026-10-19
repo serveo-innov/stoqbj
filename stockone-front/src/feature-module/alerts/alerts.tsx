@@ -40,6 +40,7 @@ const typeConfig: Record<string, { label: string; color: string; bg: string; ico
   credit_overdue:      { label:'Crédit en retard',       color:'#7c3aed', bg:'#f5f3ff', icon:'ti-credit-card-off' },
   subscription_expiry: { label:'Abonnement expirant',    color:'#d97706', bg:'#fffbeb', icon:'ti-calendar-exclamation' },
   margin_negative:     { label:'Marge négative',         color:'#dc2626', bg:'#fef2f2', icon:'ti-trending-down' },
+  payment_unconfirmed: { label:'Paiement à vérifier',    color:'#7c3aed', bg:'#f5f3ff', icon:'ti-credit-card-off' },
 };
 
 const getTypeConfig = (type: string) => {
@@ -169,6 +170,27 @@ const Alerts: React.FC = () => {
     );
   };
 
+  const renderPaymentUnconfirmedAlert = (a: AlertItem) => {
+    const meta = a.meta || {};
+    return (
+      <div className="mt-1">
+        <p className="fs-12 text-muted mb-2">
+          Un paiement PayDunya a été reçu mais n'a pas pu être confirmé automatiquement.
+          Vérifiez le statut de l'abonnement de cette boutique ; si le paiement est bien passé
+          côté PayDunya mais pas reflété ici, contactez le support.
+        </p>
+        <Link to={all_routes.subscription}
+          className="btn btn-sm d-inline-flex align-items-center gap-1"
+          style={{background:'#7c3aed',color:'#fff',border:'none',borderRadius:6,fontSize:11,padding:'4px 10px'}}>
+          <i className="ti ti-credit-card"/>Voir l'abonnement
+        </Link>
+        {meta.token && (
+          <span className="fs-11 text-muted ms-2">Réf. : {String(meta.token).slice(0, 12)}...</span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -255,6 +277,7 @@ const Alerts: React.FC = () => {
                 <option value="credit_overdue">Crédit en retard</option>
                 <option value="subscription_expiry">Abonnement expirant</option>
                 <option value="margin_negative">Marge négative</option>
+                <option value="payment_unconfirmed">Paiement à vérifier</option>
               </select>
               <div className="form-check form-switch ms-2">
                 <input className="form-check-input" type="checkbox" id="unreadOnly"
@@ -300,7 +323,9 @@ const Alerts: React.FC = () => {
                             {a.product_unit.product.name} — {a.product_unit.label}
                           </div>
                         )}
-                        {a.type === 'margin_negative' ? renderMarginAlert(a) : renderMeta(a.meta)}
+                        {a.type === 'margin_negative' ? renderMarginAlert(a)
+                          : a.type === 'payment_unconfirmed' ? renderPaymentUnconfirmedAlert(a)
+                          : renderMeta(a.meta)}
                         <div className="fs-11 text-muted mt-1">{fmtDate(a.triggered_at)}</div>
                       </div>
                       {!a.is_read && (

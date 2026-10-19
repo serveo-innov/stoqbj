@@ -20,12 +20,25 @@ const AppHeader: React.FC = () => {
   const isSuperAdmin = user?.role === 'super_admin';
   const inShopContext = isSuperAdmin && !!activeShopId;
 
+  // CORRECTIF : aucune relance n'existait nulle part avant la coupure
+  // (ni pour l'essai gratuit, ni visible ailleurs que sur la page
+  // Abonnement elle-meme, rarement visitee spontanement). Ce bandeau,
+  // dans le header commun a toutes les pages, est l'endroit le plus
+  // fiable pour etre vu. Limite a admin_shop : lui seul peut payer —
+  // le montrer a gerant/caissier n'offrirait qu'un lien sans suite.
+  const shopStatus = user?.shop?.status;
+  const daysLeft = user?.shop?.days_until_expiry ?? 999;
+  const showExpiryBanner = user?.role === 'admin_shop'
+    && (shopStatus === 'trial' || shopStatus === 'active')
+    && daysLeft <= 7;
+
   const handleExitShop = () => {
     dispatch(clearActiveShop());
     navigate(all_routes.adminDashboard);
   };
 
   return (
+    <>
     <div className="header">
       <div className="d-flex align-items-center">
         <button
@@ -72,6 +85,30 @@ const AppHeader: React.FC = () => {
         </button>
       </div>
     </div>
+
+      {showExpiryBanner && (
+        <div className="d-flex align-items-center justify-content-center gap-2 flex-wrap"
+          style={{
+            background: daysLeft <= 1 ? '#fef2f2' : '#fffbeb',
+            borderBottom: `1px solid ${daysLeft <= 1 ? '#fca5a5' : '#fde68a'}`,
+            color: daysLeft <= 1 ? '#dc2626' : '#d97706',
+            padding: '8px 16px', fontSize: 13,
+          }}>
+          <i className="ti ti-calendar-exclamation"/>
+          <span>
+            {shopStatus === 'trial' ? 'Votre essai gratuit se termine' : 'Votre abonnement expire'}
+            {' '}dans <b>{daysLeft} jour{daysLeft > 1 ? 's' : ''}</b>.
+          </span>
+          <button
+            className="btn btn-sm"
+            style={{background: daysLeft <= 1 ? '#dc2626' : '#d97706', color:'#fff', borderRadius:6, fontSize:12, padding:'3px 12px'}}
+            onClick={() => navigate(all_routes.subscription)}
+          >
+            {shopStatus === 'trial' ? "S'abonner" : 'Renouveler'}
+          </button>
+        </div>
+      )}
+    </>
   );
 };
 

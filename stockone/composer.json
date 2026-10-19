@@ -10,7 +10,6 @@
         "barryvdh/laravel-dompdf": "^3.1",
         "darkaonline/l5-swagger": "^11.1",
         "intervention/image": "^4.1",
-        "kkiapay/kkiapay-php": "dev-master",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0"

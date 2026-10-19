@@ -29,7 +29,7 @@ class AuthController extends Controller
                 required: ['email', 'password'],
                 properties: [
                     new OA\Property(property: 'email',    type: 'string', format: 'email',    example: 'superadmin@stoq.bj'),
-                    new OA\Property(property: 'password', type: 'string', format: 'password', example: 'StockOne@2025'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password', example: 'votre-mot-de-passe'),
                 ]
             )
         ),
@@ -57,7 +57,15 @@ class AuthController extends Controller
             if (! $shop || $shop->status === 'closed') {
                 return response()->json(['message' => 'Acces impossible. La boutique est fermee.'], 403);
             }
-            if ($shop->isSuspended()) {
+            // CORRECTIF : un admin_shop doit pouvoir se reconnecter meme
+            // suspendu, sinon il n'a plus aucun moyen d'atteindre la page
+            // Abonnement pour payer et se reactiver lui-meme (le paiement
+            // self-service PayDunya serait inaccessible a ceux qui en ont
+            // le plus besoin). gerant/caissier restent bloques : aucun
+            // interet a les laisser entrer, ils ne peuvent pas payer.
+            // SetTenantContext restreint ensuite ce qu'un admin_shop
+            // suspendu peut faire une fois connecte (uniquement payer).
+            if ($shop->isSuspended() && $user->role !== 'admin_shop') {
                 return response()->json(['message' => 'La boutique est suspendue.'], 403);
             }
         }
@@ -146,7 +154,10 @@ class AuthController extends Controller
                 'address'            => $validated['address'],
                 'city'               => $validated['city'],
                 'neighborhood'       => $validated['neighborhood'] ?? null,
-                'brand_color'        => '#1a73e8',
+                // CORRECTIF : meme oubli que ShopController::store() avant
+                // correction — ce chemin de creation (auto-inscription)
+                // est un fichier different, jamais touche a ce moment-la.
+                'brand_color'        => '#F97316',
                 'status'             => 'trial',
                 'trial_days'         => $trialDays,
                 // Calcules explicitement : sans cela, daysUntilExpiry() afficherait

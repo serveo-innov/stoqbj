@@ -24,7 +24,14 @@ export const useAuth = () => {
 
       dispatch(loginSuccess({ user: data.user, token: data.access_token }));
 
-      if (data.user.role === 'super_admin') {
+      // CORRECTIF : une boutique suspendue ne peut plus rien charger
+      // ailleurs (SetTenantContext bloque tout sauf les routes
+      // d'abonnement). Sans cette redirection, l'utilisateur atterrirait
+      // sur un tableau de bord casse, sans moyen evident de trouver la
+      // page de paiement pour se reactiver.
+      if (data.user.shop?.status === 'suspended') {
+        navigate(all_routes.subscription);
+      } else if (data.user.role === 'super_admin') {
         navigate(all_routes.adminDashboard);
       } else if (data.user.role === 'caissier') {
         // Le caissier n'a pas accÃ¨s Ã  /reports/dashboard (reserve a
