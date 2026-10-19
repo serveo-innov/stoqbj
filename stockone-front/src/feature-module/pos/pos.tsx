@@ -45,6 +45,7 @@ interface TodaySummary {
   ca_total: number;
   encaissements: number;
   credits_accordes: number;
+  nb_credits: number;
 }
 
 type PaymentMode = 'cash' | 'credit' | 'mobile_money' | 'mixed';
@@ -311,6 +312,10 @@ const Pos: React.FC = () => {
             <div className="text-end">
               <div className="fs-11 text-muted">CA du jour</div>
               <div className="fw-700 fs-14" style={{color:'#F97316'}}>{fmt(summary.ca_total)}</div>
+            </div>
+            <div className="text-end">
+              <div className="fs-11 text-muted">Crédits accordés</div>
+              <div className="fw-700 fs-14" style={{color:'#dc2626'}}>{summary.nb_credits}</div>
             </div>
           </div>
         )}

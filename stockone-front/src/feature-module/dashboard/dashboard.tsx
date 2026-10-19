@@ -15,6 +15,7 @@ interface DashboardData {
   ca_gros: number;
   ca_detail: number;
   ca_extra: number;
+  remises: number;
   nb_transactions: number;
   encaissements: number;
   credits_accordes: number;
@@ -86,7 +87,7 @@ const Dashboard: React.FC = () => {
           <nav aria-label="breadcrumb">
             <ol className="breadcrumb mb-0">
               <li className="breadcrumb-item active fs-13" style={{color:'#F97316'}}>
-                {user?.shop?.commercial_name || user?.shop?.shop_name || 'Stock.one'}
+                {user?.shop?.commercial_name || user?.shop?.shop_name || 'Stoq.bj'}
               </li>
               <li className="breadcrumb-item fs-13 text-muted">
                 {new Date().toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}
@@ -209,7 +210,7 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div style={{height:8, background:'#f3f4f6', borderRadius:4, overflow:'hidden'}}>
                       <div style={{
-                        height:'100%', width:`${pct}%`,
+                        height:'100%', width:`${Math.min(pct, 100)}%`,
                         background:item.color, borderRadius:4,
                         transition:'width 0.8s ease'
                       }}/>
@@ -224,6 +225,11 @@ const Dashboard: React.FC = () => {
                 <span className="fw-700 fs-14">Total CA</span>
                 <span className="fw-700 fs-16" style={{color:'#F97316'}}>{fmt(data?.ca_today || 0)}</span>
               </div>
+              {(data?.remises || 0) > 0 && (
+                <p className="fs-11 text-muted mt-1 mb-0">
+                  Ventes Gros/Détail/Extra avant remise ({fmt(data?.remises || 0)} remisés au total).
+                </p>
+              )}
             </div>
           </div>
         </div>

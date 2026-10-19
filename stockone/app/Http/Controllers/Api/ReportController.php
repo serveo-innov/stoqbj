@@ -19,6 +19,45 @@ class ReportController extends Controller
     use ResolvesShopId;
 
     /**
+     * "Encaissements" d'un jour/periode = argent recu AU MOMENT DE LA VENTE,
+     * hors remboursements de credit recus plus tard (ceux-la sont comptes
+     * a part, dans creditsPercus(), au jour ou ils sont RECUS — pas au
+     * jour de la vente d'origine).
+     *
+     * Sale.amount_paid est mutable : CreditController::addPayment y
+     * ajoute chaque remboursement recu, sans distinguer "verse a la
+     * vente" de "rembourse plus tard". On isole donc le versement
+     * initial : amount_paid actuel moins la somme des CreditPayment
+     * deja recues pour ce credit (chaque CreditPayment incremente
+     * amount_paid du meme montant qu'elle enregistre — voir addPayment).
+     * Necessite que $sales soit charge avec 'creditSale.payments'.
+     */
+    private function encaissementsDuJour($sales): float
+    {
+        return (float) $sales->sum(function ($sale) {
+            if (! $sale->creditSale) {
+                return $sale->amount_paid;
+            }
+            $dejaRembourse = $sale->creditSale->payments->sum('amount');
+            return max(0, $sale->amount_paid - $dejaRembourse);
+        });
+    }
+
+    /**
+     * "Credits percus" = remboursements de credit reellement RECUS dans la
+     * periode donnee, quelle que soit la date de la vente d'origine.
+     */
+    private function creditsPercus(int $shopId, $from, $to, ?int $userId = null): float
+    {
+        $query = \App\Models\CreditPayment::whereHas('creditSale', fn($q) => $q->where('shop_id', $shopId))
+            ->whereBetween('paid_at', [$from, $to]);
+        if ($userId) {
+            $query->where('received_by', $userId);
+        }
+        return (float) $query->sum('amount');
+    }
+
+    /**
      * Dashboard KPIs temps réel
      */
     #[OA\Get(
@@ -34,7 +73,7 @@ class ReportController extends Controller
         $today  = today();
 
         // Ventes du jour
-        $todaySales = Sale::forShop($shopId)->completed()->today()->with('items')->get();
+        $todaySales = Sale::forShop($shopId)->completed()->today()->with('items', 'creditSale.payments')->get();
 
         // Ventes hier
         $yesterdaySales = Sale::forShop($shopId)->completed()
@@ -48,6 +87,12 @@ class ReportController extends Controller
         // restait compté dans "nb_debtors", et un crédit annulé dont
         // l'échéance d'origine était passée comptait comme "en retard".
         $credits = CreditSale::forShop($shopId)->whereNotIn('status', ['paid', 'cancelled']);
+
+        // Sous-ensemble utilise pour "en retard" : on exclut aussi
+        // "doubtful" ici (choix par defaut - voir commentaire ci-dessus),
+        // sans le retirer de nb_debtors / total_remaining, qui doivent
+        // rester "tout ce qui n'est ni paye ni annule".
+        $creditsRelancables = (clone $credits)->where('status', '!=', 'doubtful');
 
         // Top 5 produits du jour
         $topProducts = SaleItem::whereHas('sale', fn($q) =>
@@ -93,14 +138,21 @@ class ReportController extends Controller
                 'ca_gros'         => $todaySales->flatMap->items->where('sale_type', 'gros')->sum('total_price'),
                 'ca_detail'       => $todaySales->flatMap->items->where('sale_type', 'detail')->sum('total_price'),
                 'ca_extra'        => $todaySales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
+                // Gros+Detail+Extra sont avant remise (SaleItem.total_price) ;
+                // ca_total est apres remise (net_amount). La remise est un
+                // montant global par vente (Sale.discount_amount), jamais
+                // reparti par categorie : on l'affiche a part plutot que de
+                // fabriquer une repartition qui n'existe pas en base.
+                'remises'         => $todaySales->sum('discount_amount'),
                 'nb_transactions' => $todaySales->count(),
-                'encaissements'   => $todaySales->sum('amount_paid'),
+                'encaissements'   => $this->encaissementsDuJour($todaySales),
+                'credits_percus'  => $this->creditsPercus($shopId, $today->copy()->startOfDay(), $today->copy()->endOfDay()),
                 'credits_accordes'=> $creditsAccordesToday,
                 'credits_en_cours'=> [
                     'total_remaining' => (clone $credits)->sum('amount_remaining'),
                     'nb_debtors'      => (clone $credits)->distinct('client_id')->count('client_id'),
-                    'nb_overdue'      => (clone $credits)->where('due_date', '<', now())->count(),
-                    'total_overdue'   => (clone $credits)->where('due_date', '<', now())->sum('amount_remaining'),
+                    'nb_overdue'      => (clone $creditsRelancables)->where('due_date', '<', now())->count(),
+                    'total_overdue'   => (clone $creditsRelancables)->where('due_date', '<', now())->sum('amount_remaining'),
                 ],
                 'top_products'    => $topProducts,
             ],
@@ -135,7 +187,7 @@ class ReportController extends Controller
         $group = $validated['group'] ?? 'day';
 
         $groupFormat = match($group) {
-            'week'  => '%Y-%u',
+            'week'  => '%x-%v', // ISO annee-semaine : %Y-%u se coupe mal en fin d'annee (semaine 1 rattachee a la mauvaise annee)
             'month' => '%Y-%m',
             default => '%Y-%m-%d',
         };
@@ -147,12 +199,47 @@ class ReportController extends Controller
             ->select(
                 DB::raw("DATE_FORMAT(sold_at, '{$groupFormat}') as period"),
                 DB::raw('COUNT(*) as nb_transactions'),
-                DB::raw('SUM(net_amount) as ca_total'),
-                DB::raw('SUM(amount_paid) as encaissements')
+                DB::raw('SUM(net_amount) as ca_total')
             )
             ->groupBy('period')
             ->orderBy('period')
             ->get();
+
+        // CORRECTIF (encaissements) : SUM(amount_paid) en SQL a le meme
+        // defaut que dashboard()/todaySummary() — un remboursement de
+        // credit recu plus tard gonfle la periode de la vente d'origine.
+        // On recalcule par periode via encaissementsDuJour(), qui isole
+        // le versement initial grace a creditSale.payments.
+        $salesForEncaissements = Sale::forShop($shopId)
+            ->completed()
+            ->whereBetween('sold_at', [$validated['from'], $validated['to'] . ' 23:59:59'])
+            ->with('creditSale.payments')
+            ->select('id', 'sold_at', 'amount_paid')
+            ->get()
+            ->groupBy(fn($sale) => $sale->sold_at->format(match($group) {
+                'week'  => 'o-W',
+                'month' => 'Y-m',
+                default => 'Y-m-d',
+            }));
+
+        $encaissementsByPeriod = $salesForEncaissements->map(fn($group) => $this->encaissementsDuJour($group));
+
+        // "Credits percus" par periode : remboursements RECUS dans la
+        // periode, quelle que soit la date de la vente d'origine.
+        $creditsPercusByPeriod = \App\Models\CreditPayment::whereHas('creditSale', fn($q) => $q->where('shop_id', $shopId))
+            ->whereBetween('paid_at', [$validated['from'], $validated['to'] . ' 23:59:59'])
+            ->select(
+                DB::raw("DATE_FORMAT(paid_at, '{$groupFormat}') as period"),
+                DB::raw('SUM(amount) as total')
+            )
+            ->groupBy('period')
+            ->pluck('total', 'period');
+
+        $sales = $sales->map(function ($row) use ($encaissementsByPeriod, $creditsPercusByPeriod) {
+            $row->encaissements   = (float) ($encaissementsByPeriod[$row->period] ?? 0);
+            $row->credits_percus  = (float) ($creditsPercusByPeriod[$row->period] ?? 0);
+            return $row;
+        });
 
         // CORRECTIF (credits_accordes) : Sale.amount_due diminue a chaque
         // paiement recu (cf. CreditController::addPayment), donc SUM(sale.
@@ -201,7 +288,7 @@ class ReportController extends Controller
         $allSales = Sale::forShop($shopId)
             ->completed()
             ->whereBetween('sold_at', [$validated['from'], $validated['to'] . ' 23:59:59'])
-            ->with('items')
+            ->with('items', 'creditSale.payments')
             ->get();
 
         return response()->json([
@@ -213,7 +300,9 @@ class ReportController extends Controller
                     'ca_gros'          => $allSales->flatMap->items->where('sale_type', 'gros')->sum('total_price'),
                     'ca_detail'        => $allSales->flatMap->items->where('sale_type', 'detail')->sum('total_price'),
                     'ca_extra'         => $allSales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
-                    'encaissements'    => $allSales->sum('amount_paid'),
+                    'remises'          => $allSales->sum('discount_amount'),
+                    'encaissements'    => $this->encaissementsDuJour($allSales),
+                    'credits_percus'   => $this->creditsPercus($shopId, $validated['from'], $validated['to'] . ' 23:59:59'),
                     'credits_accordes' => $creditsAccordesByPeriod->sum(),
                     'nb_transactions'  => $allSales->count(),
                 ],
@@ -239,6 +328,11 @@ class ReportController extends Controller
     public function daily(Request $request): JsonResponse
     {
         $shopId = $this->requireShopId($request);
+
+        // CORRECTIF : date invalide ou future -> 422 propre (avant : 500,
+        // ou creation d'un rapport vide fige pour un jour futur).
+        $request->validate(['date' => ['sometimes', 'date', 'before_or_equal:today']]);
+
         $date   = $request->date ? \Carbon\Carbon::parse($request->date) : today();
 
         // Chercher rapport existant
@@ -246,10 +340,26 @@ class ReportController extends Controller
             ->where('report_date', $date->toDateString())
             ->first();
 
-        if (! $report) {
-            // Générer à la volée
-            $report = $this->generateDailyReport($shopId, $date);
+        // CORRECTIF : un rapport n'est definitif que s'il a ete genere
+        // APRES la fin de sa journee. Sinon (absent, ou genere en cours de
+        // journee) on le recalcule : sans ca, le premier affichage du jour
+        // figeait le rapport a cette heure-la (ventes, paiements de credit
+        // et annulations suivants jamais pris en compte).
+        $isFinal = $report && $report->generated_at
+            && $report->generated_at->gte($date->copy()->endOfDay());
+
+        if (! $isFinal) {
+            $report = $this->generateDailyReportPublic($shopId, $date);
         }
+
+        // 'remises' n'a pas de colonne dans daily_reports (pas de migration
+        // pour ce correctif). Sale.discount_amount est stable, jamais
+        // modifie apres la vente : on peut le recalculer a la volee, meme
+        // pour un rapport deja fige, sans risque d'incoherence.
+        $report->remises = (float) Sale::forShop($shopId)
+            ->completed()
+            ->whereDate('sold_at', $date)
+            ->sum('discount_amount');
 
         return response()->json(['data' => $report]);
     }
@@ -294,9 +404,13 @@ class ReportController extends Controller
     {
         $shopId = $this->requireShopId($request);
 
+        // CORRECTIF : niveau 1 uniquement. Le stock des niveaux Paquet/Carton
+        // est derive du stock de base (cf. ProductUnit::stockQty) : les
+        // sommer comptait le meme stock physique 2 a 3 fois.
         $units = \App\Models\ProductUnit::whereHas('product', fn($q) =>
             $q->where('shop_id', $shopId)->where('is_active', true)
         )
+        ->where('level', 1)
         ->with('product.category')
         ->get();
 
@@ -329,7 +443,7 @@ class ReportController extends Controller
         $sales = Sale::forShop($shopId)
             ->completed()
             ->whereDate('sold_at', $date)
-            ->with('items')
+            ->with('items', 'creditSale.payments')
             ->get();
 
         $topProducts = SaleItem::whereHas('sale', fn($q) =>
@@ -347,9 +461,12 @@ class ReportController extends Controller
             'ca'   => $i->ca,
         ]);
 
+        // CORRECTIF : niveau 1 + produits actifs uniquement (meme raison
+        // que stock() : stock derive aux niveaux superieurs).
         $stockAlerts = \App\Models\ProductUnit::whereHas('product', fn($q) =>
-            $q->where('shop_id', $shopId)
+            $q->where('shop_id', $shopId)->where('is_active', true)
         )
+        ->where('level', 1)
         ->with('product')
         ->get()->filter(fn($u) => $u->stock_qty <= $u->stock_alert_threshold)
         ->map(fn($u) => ['name' => $u->product->name, 'stock' => $u->stock_qty])
@@ -368,9 +485,13 @@ class ReportController extends Controller
         // (DailyReport::updateOrCreate) : un mauvais calcul ici fige une
         // donnee fausse de façon definitive, contrairement aux endpoints
         // calcules a la volee — raison de plus pour que ce soit exact.
-        $creditsAccordesJour = CreditSale::forShop($shopId)
-            ->whereHas('sale', fn($q) => $q->completed()->whereDate('sold_at', $date))
-            ->sum('amount_due');
+        $creditsDuJourQuery = CreditSale::forShop($shopId)
+            ->whereHas('sale', fn($q) => $q->completed()->whereDate('sold_at', $date));
+        $creditsAccordesJour = (clone $creditsDuJourQuery)->sum('amount_due');
+        // CORRECTIF : on compte les creances reellement creees (et non
+        // payment_mode credit/mixed : une vente Mobile Money partielle
+        // cree aussi un CreditSale depuis le correctif 5.4).
+        $nbNewCredits = (clone $creditsDuJourQuery)->count();
 
         return DailyReport::updateOrCreate(
             ['shop_id' => $shopId, 'report_date' => $date->toDateString()],
@@ -379,11 +500,11 @@ class ReportController extends Controller
                 'ca_detail'        => $sales->flatMap->items->where('sale_type', 'detail')->sum('total_price'),
                 'ca_extra'         => $sales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
                 'ca_total'         => $sales->sum('net_amount'),
-                'encaissements'    => $sales->sum('amount_paid'),
+                'encaissements'    => $this->encaissementsDuJour($sales),
                 'credits_accordes' => $creditsAccordesJour,
                 'credits_percus'   => $creditsPercus,
                 'nb_transactions'  => $sales->count(),
-                'nb_new_credits'   => $sales->whereIn('payment_mode', ['credit', 'mixed'])->count(),
+                'nb_new_credits'   => $nbNewCredits,
                 'top_products'     => $topProducts,
                 'stock_alerts'     => $stockAlerts,
                 'generated_at'     => now(),

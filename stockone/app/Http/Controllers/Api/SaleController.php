@@ -577,7 +577,7 @@ class SaleController extends Controller
             $query->where('user_id', $user->id);
         }
 
-        $sales = $query->with('items')->get();
+        $sales = $query->with('items', 'creditSale.payments')->get();
 
         // CORRECTIF (credits_accordes) : meme raison que dans
         // ReportController — Sale.amount_due diminue a chaque paiement
@@ -599,9 +599,29 @@ class SaleController extends Controller
             'ca_gros'           => $sales->flatMap->items->where('sale_type', 'gros')->sum('total_price'),
             'ca_detail'         => $sales->flatMap->items->where('sale_type', 'detail')->sum('total_price'),
             'ca_extra'          => $sales->flatMap->items->where('sale_type', 'extra')->sum('total_price'),
-            'encaissements'     => $sales->sum('amount_paid'),
+            // Meme logique que ReportController : remise globale par
+            // vente, non repartie par categorie, affichee a part.
+            'remises'           => $sales->sum('discount_amount'),
+            // CORRECTIF (encaissements) : meme raison que ReportController —
+            // Sale.amount_paid est mutable (un remboursement de credit
+            // recu aujourd'hui, sur une vente d'hier, le gonflait ici a
+            // tort). On isole le versement initial via creditSale.payments.
+            'encaissements'     => $sales->sum(function ($sale) {
+                if (! $sale->creditSale) {
+                    return $sale->amount_paid;
+                }
+                return max(0, $sale->amount_paid - $sale->creditSale->payments->sum('amount'));
+            }),
+            // Remboursements de credit RECUS aujourd'hui, quelle que soit
+            // la date de la vente d'origine (meme filtre caissier).
+            'credits_percus'    => \App\Models\CreditPayment::whereHas('creditSale', function ($q) use ($shopId, $user) {
+                $q->where('shop_id', $shopId);
+                if ($user->isCaissier()) {
+                    $q->whereHas('sale', fn($sq) => $sq->where('user_id', $user->id));
+                }
+            })->whereDate('paid_at', today())->sum('amount'),
             'credits_accordes'  => $creditsAccordesQuery->sum('amount_due'),
-            'nb_credits'        => $sales->whereIn('payment_mode', ['credit', 'mixed'])->count(),
+            'nb_credits'        => (clone $creditsAccordesQuery)->count(),
         ];
 
         return response()->json(['data' => $summary]);

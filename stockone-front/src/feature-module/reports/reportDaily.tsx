@@ -11,6 +11,7 @@ interface DailyReportData {
   ca_gros: string;
   ca_detail: string;
   ca_extra: string;
+  remises: string;
   ca_total: string;
   encaissements: string;
   credits_accordes: string;
@@ -158,6 +159,11 @@ const ReportDaily: React.FC = () => {
               <div className="kpi-card" style={{borderLeftColor:'#16a34a'}}>
                 <p className="kpi-label mb-1">Encaissements</p>
                 <h3 className="kpi-value" style={{color:'#16a34a'}}>{fmt(report.encaissements)}</h3>
+                {Number(report.credits_percus) > 0 && (
+                  <p className="fs-11 text-muted mb-0">
+                    dont {fmt(report.credits_percus)} de remboursements de crédit reçus
+                  </p>
+                )}
               </div>
             </div>
             <div className="col-md-3">
@@ -191,6 +197,13 @@ const ReportDaily: React.FC = () => {
               </div></div>
             </div>
           </div>
+
+          {Number(report.remises) > 0 && (
+            <p className="fs-12 text-muted mb-4">
+              Gros + Détail + Extra sont avant remise. Remises accordées ce jour : {fmt(report.remises)}
+              {' '}(Gros + Détail + Extra − Remises = CA Total).
+            </p>
+          )}
 
           <div className="row g-3 mb-4">
             {/* Top produits */}

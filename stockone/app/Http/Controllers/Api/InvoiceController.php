@@ -126,6 +126,11 @@ class InvoiceController extends Controller
     public function dailyReportPdf(Request $request): Response
     {
         $shopId = $this->requireShopId($request);
+
+        // CORRECTIF : meme validation que ReportController::daily() —
+        // une date invalide ou future donnait un PDF vide fige a jamais.
+        $request->validate(['date' => ['sometimes', 'date', 'before_or_equal:today']]);
+
         $date   = $request->date ? \Carbon\Carbon::parse($request->date) : today();
         $shop   = StationeryShop::findOrFail($shopId);
 
@@ -134,13 +139,28 @@ class InvoiceController extends Controller
             ->where('report_date', $date->toDateString())
             ->first();
 
-        if (! $report) {
+        // CORRECTIF : meme regle que ReportController::daily() — rapport
+        // definitif uniquement s'il a ete genere apres la fin de sa journee.
+        $isFinal = $report && $report->generated_at
+            && $report->generated_at->gte($date->copy()->endOfDay());
+
+        if (! $isFinal) {
             // Générer via le ReportController
             $reportController = new ReportController();
             $report = $reportController->generateDailyReportPublic($shopId, $date);
         }
 
-        $pdf = Pdf::loadView('pdf.daily-report', compact('report', 'shop'))
+        // 'remises' n'a pas de colonne dans daily_reports (pas de migration
+        // pour ce correctif) : variable a part pour la vue, jamais assignee
+        // sur $report (le $report->update() plus bas plante sinon, faute
+        // de colonne). Sale.discount_amount est stable : recalcul a la
+        // volee sans risque, meme pour un rapport deja fige.
+        $remises = (float) Sale::forShop($shopId)
+            ->completed()
+            ->whereDate('sold_at', $date)
+            ->sum('discount_amount');
+
+        $pdf = Pdf::loadView('pdf.daily-report', compact('report', 'shop', 'remises'))
             ->setPaper('a4', 'portrait')
             ->setOptions([
                 'defaultFont'          => 'DejaVu Sans',

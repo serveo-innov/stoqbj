@@ -7,6 +7,7 @@ interface Totals {
   ca_gros: number;
   ca_detail: number;
   ca_extra: number;
+  remises: number;
   encaissements: number;
   credits_accordes: number;
   nb_transactions: number;
@@ -271,6 +272,13 @@ const ReportPeriod: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {report.totals.remises > 0 && (
+            <p className="fs-12 text-muted mb-4">
+              Gros + Détail + Extra sont avant remise. Remises accordées sur la période : {fmt(report.totals.remises)}
+              {' '}(Gros + Détail + Extra − Remises = CA Total).
+            </p>
+          )}
 
           <div className="row g-3">
             {/* Timeline */}
