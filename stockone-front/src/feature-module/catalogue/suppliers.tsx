@@ -86,6 +86,17 @@ const Suppliers: React.FC = () => {
     } catch (e: any) { setError(e.message); }
   };
 
+  // CORRECTIF : ce bouton n'existait pas. is_active etait stocke et
+  // affiche (badge) sans jamais pouvoir etre change depuis l'ecran, et
+  // sans filtrer nulle part les fournisseurs proposes ailleurs (voir
+  // stockEntry.tsx, corrige separement).
+  const toggleActive = async (s: Supplier) => {
+    try {
+      await api.put(`/suppliers/${s.id}`, { is_active: !s.is_active });
+      load();
+    } catch (e: any) { setError(e.message); }
+  };
+
   const filtered = suppliers.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     (s.city || '').toLowerCase().includes(search.toLowerCase())
@@ -204,6 +215,11 @@ const Suppliers: React.FC = () => {
                           <button className="btn btn-sm" onClick={() => openEditModal(s)}
                             style={{background:'#f3f4f6',border:'none',borderRadius:6,padding:'4px 8px'}}>
                             <i className="ti ti-edit" style={{color:'#1a1a1a'}}/>
+                          </button>
+                          <button className="btn btn-sm" title={s.is_active ? 'Desactiver' : 'Activer'}
+                            onClick={() => toggleActive(s)}
+                            style={{background: s.is_active ? '#fff7ed' : '#f0fdf4', border:'none',borderRadius:6,padding:'4px 8px'}}>
+                            <i className={`ti ${s.is_active ? 'ti-eye-off' : 'ti-eye'}`} style={{color: s.is_active ? '#EA580C' : '#16a34a'}}/>
                           </button>
                           <button className="btn btn-sm" onClick={() => handleDelete(s)}
                             style={{background:'#fef2f2',border:'none',borderRadius:6,padding:'4px 8px'}}>

@@ -18,6 +18,7 @@ interface ProductUnit {
 interface Supplier {
   id: number;
   name: string;
+  is_active: boolean;
 }
 
 interface MarginInfo {
@@ -279,7 +280,7 @@ const StockEntry: React.FC = () => {
                         onChange={e => setForm(f=>({...f,supplier_id:e.target.value}))}
                         style={{borderColor:'#e5e7eb',borderRadius:8}}>
                         <option value="">Sans fournisseur</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {suppliers.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
                   )}

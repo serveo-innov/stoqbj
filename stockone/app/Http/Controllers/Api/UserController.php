@@ -275,6 +275,42 @@ class UserController extends Controller
     }
 
     /**
+     * Modifier son propre profil (nom, prenom, telephone)
+     *
+     * MANQUE COMBLE : update() interdit explicitement l'auto-modification,
+     * et il n'existait aucune autre route pour changer son propre nom/
+     * prenom/telephone (seul le mot de passe l'etait, via changeOwnPassword
+     * ci-dessus). Un admin_shop avec une faute de frappe dans son nom
+     * n'avait aucun moyen de la corriger. Volontairement limite a ces 3
+     * champs : ni role ni is_active ne sont modifiables ici (update() les
+     * gere deja, pour les AUTRES utilisateurs).
+     */
+    #[OA\Put(
+        path: '/users/me',
+        summary: 'Modifier son propre profil (nom, prenom, telephone)',
+        security: [['bearerAuth' => []]],
+        tags: ['Utilisateurs'],
+        responses: [new OA\Response(response: 200, description: 'Profil modifie')]
+    )]
+    public function updateOwnProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name'      => ['sometimes', 'string', 'max:100'],
+            'firstname' => ['sometimes', 'string', 'max:100'],
+            'phone'     => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $user->update($validated);
+
+        return response()->json([
+            'data'    => $this->formatUser($user->fresh()),
+            'message' => 'Profil modifie.',
+        ]);
+    }
+
+    /**
      * Activer / Désactiver un utilisateur
      */
     #[OA\Post(
@@ -294,6 +330,23 @@ class UserController extends Controller
             return response()->json(['message' => 'Vous ne pouvez pas desactiver votre propre compte.'], 403);
         }
 
+        // AVERTISSEMENT (non bloquant, pas de restriction) : desactiver le
+        // dernier admin_shop actif d'une boutique laisse cette boutique
+        // sans personne pour gerer ses utilisateurs (le gerant n'a pas ce
+        // droit). super_admin reste volontairement libre de le faire, ce
+        // role etant celui de l'equipe plateforme — on previent juste.
+        $lastAdminWarning = null;
+        if ($user->role === 'admin_shop' && $user->is_active) {
+            $autresAdminsActifs = User::where('shop_id', $shopId)
+                ->where('role', 'admin_shop')
+                ->where('id', '!=', $user->id)
+                ->where('is_active', true)
+                ->exists();
+            if (! $autresAdminsActifs) {
+                $lastAdminWarning = "Attention : c'etait le dernier admin_shop actif de cette boutique. Plus personne ne pourra y gerer les utilisateurs tant qu'aucun admin_shop n'est reactive.";
+            }
+        }
+
         $user->update(['is_active' => ! $user->is_active]);
 
         // Révoquer les tokens si désactivé
@@ -303,8 +356,9 @@ class UserController extends Controller
 
         $status = $user->is_active ? 'active' : 'desactive';
         return response()->json([
-            'message'   => "Compte {$status}.",
+            'message'   => "Compte {$status}." . ($lastAdminWarning ? ' ' . $lastAdminWarning : ''),
             'is_active' => $user->is_active,
+            'warning'   => $lastAdminWarning,
         ]);
     }
 
@@ -326,6 +380,26 @@ class UserController extends Controller
 
         if ($user->id === $request->user()->id) {
             return response()->json(['message' => 'Vous ne pouvez pas supprimer votre propre compte.'], 403);
+        }
+
+        // Suppression irreversible : un avertissement apres coup ne sert a
+        // rien ici (contrairement a toggle()). On exige une confirmation
+        // explicite avant de supprimer le dernier admin_shop actif d'une
+        // boutique — meme principe que refund_confirmed dans Sale::cancel().
+        // Pas un blocage : super_admin peut toujours le faire, juste pas
+        // par inadvertance.
+        if ($user->role === 'admin_shop' && $user->is_active) {
+            $autresAdminsActifs = User::where('shop_id', $shopId)
+                ->where('role', 'admin_shop')
+                ->where('id', '!=', $user->id)
+                ->where('is_active', true)
+                ->exists();
+            if (! $autresAdminsActifs && ! $request->boolean('confirm_last_admin')) {
+                return response()->json([
+                    'message' => "C'est le dernier admin_shop actif de cette boutique. Plus personne ne pourra y gerer les utilisateurs. Renvoyez la requete avec confirm_last_admin=true pour confirmer.",
+                    'requires_confirmation' => 'confirm_last_admin',
+                ], 409);
+            }
         }
 
         $user->tokens()->delete();
